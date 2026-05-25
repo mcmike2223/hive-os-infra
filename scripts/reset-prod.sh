@@ -12,9 +12,13 @@ COMPOSE_FILE="docker-compose.prod.yml"
 COMPOSE="docker compose -f ${COMPOSE_FILE}"
 
 echo "== Pulling latest code =="
-git fetch origin main
-git checkout main
-git pull --ff-only origin main
+if [ -d ".git" ]; then
+  git fetch origin main
+  git checkout main
+  git pull --ff-only origin main
+else
+  echo "Not a git repository (no .git folder found). Skipping git pull."
+fi
 
 echo "== Confirm Redis PECL compile block is gone =="
 if [ -f "backend/Dockerfile.prod" ]; then
