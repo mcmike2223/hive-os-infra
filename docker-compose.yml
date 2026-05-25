@@ -1,0 +1,414 @@
+services:
+  # 1. CACHE (Redis)
+  redis:
+    image: redis:alpine
+    container_name: hive-redis
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - hive-network
+
+  # 2. DATABASE (Postgres 17)
+  db:
+    image: postgres:17-alpine
+    container_name: hive-db
+    restart: unless-stopped
+    ports:
+      - "5439:5432"
+    environment:
+      POSTGRES_DB: hive
+      POSTGRES_USER: hive
+      POSTGRES_PASSWORD: password
+    volumes:
+      - hive-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hive"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - hive-network
+
+  # 3. SEARCH (Meilisearch)
+  meilisearch:
+    image: getmeili/meilisearch:v1.10
+    container_name: hive-search
+    restart: unless-stopped
+    ports:
+      - "7700:7700"
+    environment:
+      - MEILI_MASTER_KEY=masterKey
+      - MEILI_NO_ANALYTICS=true
+    volumes:
+      - hive-search-data:/meili_data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7700/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - hive-network
+
+  # 4. EMAIL CATCHER (Mailpit)
+  mailpit:
+    image: axllent/mailpit
+    container_name: hive-mailpit
+    restart: unless-stopped
+    ports:
+      - "1025:1025" # SMTP Port
+      - "8025:8025" # Web Dashboard Port
+    networks:
+      - hive-network
+
+  # 🚀 5. AI BACKGROUND REMOVAL (rembg)
+  rembg:
+    image: danielgatis/rembg:latest
+    container_name: hive-ai-rembg
+    profiles:
+      - ai
+    restart: unless-stopped
+    # Add the host and port flags to force it to listen externally
+    command: s --host 0.0.0.0 --port 5000 
+    ports:
+      - "5000:5000"
+    networks:
+      - hive-network
+
+  # 6. OBJECT STORAGE (SeaweedFS)
+  seaweedfs:
+    image: chrislusf/seaweedfs:3.94
+    container_name: hive-seaweedfs
+    restart: unless-stopped
+    command: server -dir=/data -s3
+    ports:
+      - "${SEAWEEDFS_S3_HOST_PORT:-8333}:8333"
+      - "${SEAWEEDFS_FILER_HOST_PORT:-8888}:8888"
+      - "${SEAWEEDFS_MASTER_HOST_PORT:-9333}:9333"
+    environment:
+      AWS_ACCESS_KEY_ID: ${SEAWEEDFS_ACCESS_KEY:-seaweedfs}
+      AWS_SECRET_ACCESS_KEY: ${SEAWEEDFS_SECRET_KEY:-change-this-seaweedfs-secret}
+    volumes:
+      - hive-seaweedfs-data:/data
+    networks:
+      - hive-network
+
+  seaweedfs-bootstrap:
+    image: minio/mc:latest
+    container_name: hive-seaweedfs-bootstrap
+    depends_on:
+      seaweedfs:
+        condition: service_started
+    restart: "no"
+    environment:
+      SEAWEEDFS_ACCESS_KEY: ${SEAWEEDFS_ACCESS_KEY:-seaweedfs}
+      SEAWEEDFS_SECRET_KEY: ${SEAWEEDFS_SECRET_KEY:-change-this-seaweedfs-secret}
+    entrypoint: >
+      /bin/sh -ec "
+      until mc alias set local http://seaweedfs:8333 ${SEAWEEDFS_ACCESS_KEY:-seaweedfs} ${SEAWEEDFS_SECRET_KEY:-change-this-seaweedfs-secret} >/dev/null 2>&1; do
+        sleep 2;
+      done &&
+      mc mb --ignore-existing local/${SEAWEEDFS_BUCKET:-hive-local} >/dev/null 2>&1 || true
+      "
+    networks:
+      - hive-network
+
+  seaweedfs-browser:
+    image: cloudlena/s3manager:v0.5.0
+    container_name: hive-seaweedfs-browser
+    profiles:
+      - storage-ui
+    restart: unless-stopped
+    ports:
+      - "${SEAWEEDFS_BROWSER_HOST_PORT:-9091}:8080"
+    environment:
+      ENDPOINT: seaweedfs:8333
+      REGION: us-east-1
+      ACCESS_KEY_ID: ${SEAWEEDFS_ACCESS_KEY:-seaweedfs}
+      SECRET_ACCESS_KEY: ${SEAWEEDFS_SECRET_KEY:-change-this-seaweedfs-secret}
+      USE_SSL: "false"
+      SIGNATURE_TYPE: V4
+      FORCE_DOWNLOAD: "false"
+      ALLOW_DELETE: "true"
+    depends_on:
+      seaweedfs:
+        condition: service_started
+      seaweedfs-bootstrap:
+        condition: service_completed_successfully
+    networks:
+      - hive-network
+
+  # 7. THE BRAIN (Laravel 12 + Octane)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: hive-backend
+    restart: unless-stopped
+    ports:
+      - "8085:8000"
+    environment:
+      APP_NAME: "Hive ERP"
+      APP_ENV: local
+      APP_DEBUG: "true"
+      APP_KEY: base64:c29tZXJhbmRvbXN0cmluZ2ZvcmRldmVsb3BtZW50MjE=
+      APP_URL: http://localhost:8085
+      DB_CONNECTION: pgsql
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_DATABASE: hive
+      DB_USERNAME: hive
+      DB_PASSWORD: password
+      OCTANE_SERVER: roadrunner
+      SCOUT_DRIVER: meilisearch
+      MEILISEARCH_HOST: http://meilisearch:7700
+      MEILISEARCH_KEY: masterKey
+      REDIS_HOST: redis
+      CACHE_STORE: redis
+      QUEUE_CONNECTION: redis
+      FILESYSTEM_DISK: s3
+      MEDIA_DISK: s3
+      AWS_ACCESS_KEY_ID: ${SEAWEEDFS_ACCESS_KEY:-seaweedfs}
+      AWS_SECRET_ACCESS_KEY: ${SEAWEEDFS_SECRET_KEY:-change-this-seaweedfs-secret}
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_BUCKET: ${SEAWEEDFS_BUCKET:-hive-local}
+      AWS_ENDPOINT: http://seaweedfs:8333
+      AWS_URL: http://localhost:${SEAWEEDFS_S3_HOST_PORT:-8333}/${SEAWEEDFS_BUCKET:-hive-local}
+      AWS_ROOT_PREFIX: media
+      AWS_USE_PATH_STYLE_ENDPOINT: "true"
+      MAIL_MAILER: smtp
+      MAIL_HOST: mailpit
+      MAIL_PORT: 1025
+      BROADCAST_CONNECTION: reverb
+      WATCHPACK_POLLING: "true"
+      GOTENBERG_URL: http://gotenberg:3000
+      FFMPEG_URL: http://ffmpeg:9090
+      # 📡 REAL-TIME BROADCASTING
+      REVERB_APP_ID: "326162"
+      REVERB_APP_KEY: "uq8zbsjhgcajsmdiwhc8"
+      REVERB_APP_SECRET: "u0shs2anhgao3uikmlbq"
+      REVERB_PORT: "9000"
+      REVERB_SCHEME: "http"
+      NEXT_PUBLIC_REVERB_APP_KEY: "uq8zbsjhgcajsmdiwhc8"
+      NEXT_PUBLIC_REVERB_HOST: "localhost"
+      NEXT_PUBLIC_REVERB_PORT: "9000"
+      NEXT_PUBLIC_REVERB_SCHEME: "http"
+      # 🚀 TELL LARAVEL WHERE REVERB LIVES IN DOCKER
+      REVERB_HOST: reverb
+      PUSHER_HOST: reverb
+      PUSHER_APP_ID: "326162"
+      PUSHER_APP_KEY: "uq8zbsjhgcajsmdiwhc8"
+      PUSHER_APP_SECRET: "u0shs2anhgao3uikmlbq"
+      PUSHER_PORT: "9000"
+      PUSHER_SCHEME: "http"
+    depends_on:
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+      meilisearch:
+        condition: service_healthy
+      seaweedfs:
+        condition: service_started
+      seaweedfs-bootstrap:
+        condition: service_completed_successfully
+      ffmpeg:
+        condition: service_healthy
+    command: php artisan octane:start --server=roadrunner --host=0.0.0.0 --port=8000
+    networks:
+      hive-network:
+        aliases:
+          - apple.localhost
+          - tesla.localhost
+          - spacex.localhost
+
+  # 8. THE WORKER (Background Jobs)
+  queue:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: hive-queue
+    restart: unless-stopped
+    environment:
+      APP_NAME: "Hive ERP"
+      APP_ENV: local
+      APP_KEY: base64:c29tZXJhbmRvbXN0cmluZ2ZvcmRldmVsb3BtZW50MjE=
+      DB_CONNECTION: pgsql
+      DB_HOST: db
+      DB_DATABASE: hive
+      DB_USERNAME: hive
+      DB_PASSWORD: password
+      REDIS_HOST: redis
+      QUEUE_CONNECTION: redis
+      REVERB_APP_ID: "326162"
+      REVERB_APP_KEY: "uq8zbsjhgcajsmdiwhc8"
+      REVERB_APP_SECRET: "u0shs2anhgao3uikmlbq"
+      REVERB_PORT: "9000"
+      REVERB_SCHEME: "http"
+      FILESYSTEM_DISK: s3
+      MEDIA_DISK: s3
+      AWS_ACCESS_KEY_ID: ${SEAWEEDFS_ACCESS_KEY:-seaweedfs}
+      AWS_SECRET_ACCESS_KEY: ${SEAWEEDFS_SECRET_KEY:-change-this-seaweedfs-secret}
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_BUCKET: ${SEAWEEDFS_BUCKET:-hive-local}
+      AWS_ENDPOINT: http://seaweedfs:8333
+      AWS_URL: http://localhost:${SEAWEEDFS_S3_HOST_PORT:-8333}/${SEAWEEDFS_BUCKET:-hive-local}
+      AWS_ROOT_PREFIX: media
+      AWS_USE_PATH_STYLE_ENDPOINT: "true"
+      MAIL_MAILER: smtp
+      MAIL_HOST: mailpit
+      MAIL_PORT: 1025
+      BROADCAST_CONNECTION: reverb
+      # 🚀 TELL THE WORKER WHERE REVERB LIVES (For queued broadcasts)
+      REVERB_HOST: reverb
+      PUSHER_HOST: reverb
+      PUSHER_APP_ID: "326162"
+      PUSHER_APP_KEY: "uq8zbsjhgcajsmdiwhc8"
+      PUSHER_APP_SECRET: "u0shs2anhgao3uikmlbq"
+      PUSHER_PORT: "9000"
+      PUSHER_SCHEME: "http"
+    depends_on:
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+      seaweedfs:
+        condition: service_started
+      seaweedfs-bootstrap:
+        condition: service_completed_successfully
+    command: php artisan horizon
+    networks:
+      - hive-network
+
+  # 9. THE FACE (Next.js 16)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: hive-frontend
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    environment:
+      NODE_ENV: development
+      NEXT_PUBLIC_API_URL: http://localhost:8085/api/v1
+      INTERNAL_API_URL: http://backend:8000/api/v1
+      WATCHPACK_POLLING: "true"
+      # 📡 REAL-TIME BROADCASTING
+      NEXT_PUBLIC_REVERB_APP_KEY: "uq8zbsjhgcajsmdiwhc8"
+      NEXT_PUBLIC_REVERB_HOST: "localhost"
+      NEXT_PUBLIC_REVERB_PORT: "9000"
+      NEXT_PUBLIC_REVERB_SCHEME: "http"
+      # 🚀Forces Next.js to broadcast outside the container
+      HOSTNAME: "0.0.0.0"
+      PORT: 3000
+    depends_on:
+      - backend
+    command: sh /app/docker-entrypoint.sh
+    networks:
+      - hive-network
+
+  # 10. DATABASE GUI (Adminer)
+  adminer:
+    image: adminer
+    container_name: hive-adminer
+    restart: unless-stopped
+    ports:
+      - "8090:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: db
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - hive-network
+
+  # 🚀 11. WEBSOCKET ENGINE (Reverb)
+  reverb:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: hive-reverb
+    restart: unless-stopped
+    ports:
+      - "9000:9000" # Expose Reverb to your local browser
+    environment:
+      APP_NAME: "Hive ERP"
+      APP_ENV: local
+      APP_KEY: base64:c29tZXJhbmRvbXN0cmluZ2ZvcmRldmVsb3BtZW50MjE=
+      DB_CONNECTION: pgsql
+      DB_HOST: db
+      DB_DATABASE: hive
+      DB_USERNAME: hive
+      DB_PASSWORD: password
+      REDIS_HOST: redis
+      BROADCAST_CONNECTION: reverb
+      REVERB_APP_ID: "326162"
+      REVERB_APP_KEY: "uq8zbsjhgcajsmdiwhc8"
+      REVERB_APP_SECRET: "u0shs2anhgao3uikmlbq"
+      REVERB_HOST: localhost
+      REVERB_PORT: "9000"
+      REVERB_SCHEME: "http"
+      FILESYSTEM_DISK: s3
+      MEDIA_DISK: s3
+      AWS_ACCESS_KEY_ID: ${SEAWEEDFS_ACCESS_KEY:-seaweedfs}
+      AWS_SECRET_ACCESS_KEY: ${SEAWEEDFS_SECRET_KEY:-change-this-seaweedfs-secret}
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_BUCKET: ${SEAWEEDFS_BUCKET:-hive-local}
+      AWS_ENDPOINT: http://seaweedfs:8333
+      AWS_URL: http://localhost:${SEAWEEDFS_S3_HOST_PORT:-8333}/${SEAWEEDFS_BUCKET:-hive-local}
+      AWS_ROOT_PREFIX: media
+      AWS_USE_PATH_STYLE_ENDPOINT: "true"
+    depends_on:
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+      seaweedfs:
+        condition: service_started
+      seaweedfs-bootstrap:
+        condition: service_completed_successfully
+    command: php artisan reverb:start --host=0.0.0.0 --port=9000
+    networks:
+      - hive-network
+
+  # 🎬 12. MEDIA CONVERTER (FFmpeg API)
+  ffmpeg:
+    build:
+      context: ./ffmpeg-api
+      dockerfile: Dockerfile
+    container_name: hive-ffmpeg
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9090/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - hive-network
+
+  # 📄 13. PDF & DOC CONVERTER (Gotenberg)
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    container_name: hive-gotenberg
+    profiles:
+      - docs
+    restart: unless-stopped
+    ports:
+      - "3030:3000" # Mapped to 3030 on the host machine to prevent port collision with Next.js
+    networks:
+      - hive-network
+
+networks:
+  hive-network:
+    driver: bridge
+
+volumes:
+  hive-db-data:
+  hive-search-data:
+  hive-seaweedfs-data:
