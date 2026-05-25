@@ -25,6 +25,7 @@
 }
 
 {
+	admin :2019
 	on_demand_tls {
 		ask http://backend:8000/api/internal/caddy/allow-domain
 	}
@@ -34,6 +35,12 @@
 	import security
 	encode zstd gzip
 	reverse_proxy frontend:3000
+}
+
+{$GRAFANA_DOMAIN} {
+	import security
+	encode zstd gzip
+	reverse_proxy grafana:3000
 }
 
 {$BACKEND_DOMAIN} {

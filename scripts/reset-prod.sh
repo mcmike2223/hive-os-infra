@@ -69,6 +69,8 @@ mkdir -p \
   storage/caddy_runtime \
   storage/caddy_data \
   storage/caddy_config \
+  storage/prometheus-data \
+  storage/grafana-data \
   backend/storage/framework/cache \
   backend/storage/framework/sessions \
   backend/storage/framework/views \
@@ -77,6 +79,7 @@ mkdir -p \
 
 # Ensure correct permissions for host mounted folders before build/start
 chmod -R 775 storage backend/storage backend/bootstrap/cache 2>/dev/null || true
+chmod -R 777 storage/prometheus-data storage/grafana-data 2>/dev/null || true
 
 echo "== Rebuild images cleanly =="
 $COMPOSE build --progress plain caddy backend queue reverb frontend ffmpeg
@@ -201,10 +204,12 @@ $COMPOSE exec -T backend php artisan config:cache
 $COMPOSE exec -T backend php artisan view:cache
 
 echo "== Start app services =="
-$COMPOSE up -d queue reverb frontend caddy
+$COMPOSE up -d queue reverb frontend prometheus grafana node-exporter cadvisor caddy
 wait_for_service queue
 wait_for_service reverb
 wait_for_service frontend
+wait_for_service prometheus
+wait_for_service grafana
 wait_for_service caddy
 
 echo "== Rebuild Meilisearch indexes =="
@@ -215,8 +220,8 @@ $COMPOSE exec -T backend php artisan octane:reload || true
 $COMPOSE exec -T backend php artisan horizon:terminate || true
 $COMPOSE exec -T backend php artisan horizon:clear || true
 
-echo "== Restart frontend/backend/queue/reverb/caddy =="
-$COMPOSE restart frontend backend queue reverb caddy
+echo "== Restart frontend/backend/queue/reverb/caddy/monitoring =="
+$COMPOSE restart frontend backend queue reverb prometheus grafana node-exporter cadvisor caddy
 
 echo "== Final status =="
 $COMPOSE ps

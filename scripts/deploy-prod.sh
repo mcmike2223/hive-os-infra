@@ -241,6 +241,7 @@ ensure_runtime_env() {
   ensure_env_value MEILISEARCH_DOMAIN "hive-search.$(get_env_value ROOT_DOMAIN)"
   ensure_env_value REMBG_DOMAIN "hive-rembg.$(get_env_value ROOT_DOMAIN)"
   ensure_env_value GOTENBERG_DOMAIN "hive-docs.$(get_env_value ROOT_DOMAIN)"
+  ensure_env_value GRAFANA_DOMAIN "hive-monitor.$(get_env_value ROOT_DOMAIN)"
 
   ensure_env_value BACKEND_INTERNAL_URL "http://backend:8000"
   ensure_env_value FRONTEND_INTERNAL_URL "http://frontend:3000"
@@ -341,7 +342,8 @@ configure_caddy_runtime() {
     exit 1
   fi
 
-  mkdir -p storage/caddy_runtime storage/caddy_data storage/caddy_config
+  mkdir -p storage/caddy_runtime storage/caddy_data storage/caddy_config storage/prometheus-data storage/grafana-data
+  chmod -R 777 storage/prometheus-data storage/grafana-data 2>/dev/null || true
   rm -rf storage/caddy_runtime/Caddyfile
   cp "${source_file}" storage/caddy_runtime/Caddyfile
   test -f storage/caddy_runtime/Caddyfile
@@ -435,7 +437,7 @@ COMPOSE_QUIET=1 compose config >/tmp/hive-compose-config.yml
 
 echo "Pulling remote production images..."
 DEPLOY_STEP="Pulling remote production images"
-compose pull backend queue reverb frontend
+compose pull backend queue reverb frontend prometheus grafana node-exporter cadvisor
 
 echo "Building production images..."
 for service in caddy ffmpeg; do
@@ -531,7 +533,7 @@ fi
 
 echo "Starting app services..."
 DEPLOY_STEP="Starting app services"
-compose up -d queue reverb frontend caddy
+compose up -d queue reverb frontend prometheus grafana node-exporter cadvisor caddy
 
 DEPLOY_STEP="Waiting for queue"
 wait_for_service queue
@@ -539,6 +541,10 @@ DEPLOY_STEP="Waiting for reverb"
 wait_for_service reverb
 DEPLOY_STEP="Waiting for frontend"
 wait_for_service frontend
+DEPLOY_STEP="Waiting for prometheus"
+wait_for_service prometheus
+DEPLOY_STEP="Waiting for grafana"
+wait_for_service grafana
 DEPLOY_STEP="Waiting for caddy"
 wait_for_service caddy
 

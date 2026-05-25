@@ -1,3 +1,7 @@
+{
+	admin :2019
+}
+
 (security) {
 	header {
 		# Enable HSTS
@@ -99,4 +103,14 @@
 	}
 
 	reverse_proxy meilisearch:7700
+}
+
+{$GRAFANA_DOMAIN:hive-monitor.gulfingot.com} {
+	import security
+	tls {
+		dns cloudflare {env.CF_API_TOKEN}
+		resolvers 1.1.1.1 1.0.0.1
+	}
+
+	reverse_proxy grafana:3000
 }
