@@ -38,12 +38,18 @@ jobs:
           GHCR_TOKEN: ${{ secrets.VPS_GHCR_TOKEN }}
           GHCR_USER: ${{ secrets.VPS_GHCR_USER }}
         run: |
-          # Build the base64 auth string (user:token) and write docker config directly
-          # This avoids docker login TTY requirement entirely
+          # Build a valid docker config.json on the runner, then scp it to the VPS.
+          # This avoids all shell-quoting issues when passing JSON through SSH.
           AUTH=$(printf '%s:%s' "${GHCR_USER}" "${GHCR_TOKEN}" | base64 -w 0)
-          DOCKER_CONFIG=$(printf '{"auths":{"ghcr.io":{"auth":"%s"}}}' "${AUTH}")
+          mkdir -p /tmp/ghcr-creds
+          printf '{"auths":{"ghcr.io":{"auth":"%s"}}}\n' "${AUTH}" > /tmp/ghcr-creds/config.json
+          # Ensure the remote .docker dir exists
+          ssh ${{ secrets.VPS_SSH_USER }}@${{ secrets.VPS_HOST_IP }} "mkdir -p ~/.docker"
+          # Copy the file cleanly — no shell quoting of JSON content
+          scp /tmp/ghcr-creds/config.json \
+            ${{ secrets.VPS_SSH_USER }}@${{ secrets.VPS_HOST_IP }}:~/.docker/config.json
           ssh ${{ secrets.VPS_SSH_USER }}@${{ secrets.VPS_HOST_IP }} \
-            "mkdir -p ~/.docker && printf '%s' '${DOCKER_CONFIG}' > ~/.docker/config.json && chmod 600 ~/.docker/config.json"
+            "chmod 600 ~/.docker/config.json && docker pull ghcr.io/${{ secrets.VPS_GHCR_USER }}/hive-os-backend:latest 2>&1 | tail -3"
 
       - name: Run deploy script on VPS
         run: |
