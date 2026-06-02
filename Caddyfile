@@ -105,3 +105,16 @@ https:// {
 		reverse_proxy frontend:3000
 	}
 }
+
+# Techive ERP Legacy Routing
+erp.harrawefarm.com {
+	encode zstd gzip
+
+	handle /app* {
+		reverse_proxy 78.47.138.239:8082
+	}
+
+	handle {
+		reverse_proxy 78.47.138.239:8088
+	}
+}
