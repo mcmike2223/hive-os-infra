@@ -150,6 +150,8 @@ services:
     restart: unless-stopped
     ports:
       - "8085:8000"
+    volumes:
+      - hive-backend-storage:/var/www/html/storage
     environment:
       APP_NAME: "Hive ERP"
       APP_ENV: local
@@ -232,6 +234,8 @@ services:
       dockerfile: Dockerfile
     container_name: hive-queue
     restart: unless-stopped
+    volumes:
+      - hive-backend-storage:/var/www/html/storage
     environment:
       APP_NAME: "Hive ERP"
       APP_ENV: local
@@ -280,6 +284,72 @@ services:
       seaweedfs-bootstrap:
         condition: service_completed_successfully
     command: php artisan horizon
+    networks:
+      - hive-network
+
+  # 8b. THE SCHEDULER (Laravel Scheduler)
+  scheduler:
+    build:
+      context: ../hive-os-backend
+      dockerfile: Dockerfile
+    container_name: hive-scheduler
+    restart: unless-stopped
+    environment:
+      APP_NAME: "Hive ERP"
+      APP_ENV: local
+      APP_KEY: base64:c29tZXJhbmRvbXN0cmluZ2ZvcmRldmVsb3BtZW50MjE=
+      DB_CONNECTION: pgsql
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_DATABASE: hive
+      DB_USERNAME: hive
+      DB_PASSWORD: password
+      OCTANE_SERVER: roadrunner
+      SCOUT_DRIVER: meilisearch
+      MEILISEARCH_HOST: http://meilisearch:7700
+      MEILISEARCH_KEY: masterKey
+      REDIS_HOST: redis
+      CACHE_STORE: redis
+      QUEUE_CONNECTION: redis
+      FILESYSTEM_DISK: s3
+      MEDIA_DISK: s3
+      AWS_ACCESS_KEY_ID: ${SEAWEEDFS_ACCESS_KEY:-seaweedfs}
+      AWS_SECRET_ACCESS_KEY: ${SEAWEEDFS_SECRET_KEY:-change-this-seaweedfs-secret}
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_BUCKET: ${SEAWEEDFS_BUCKET:-hive-local}
+      AWS_ENDPOINT: http://seaweedfs:8333
+      AWS_URL: http://localhost:${SEAWEEDFS_S3_HOST_PORT:-8333}/${SEAWEEDFS_BUCKET:-hive-local}
+      AWS_ROOT_PREFIX: media
+      AWS_USE_PATH_STYLE_ENDPOINT: "true"
+      MAIL_MAILER: smtp
+      MAIL_HOST: mailpit
+      MAIL_PORT: 1025
+      BROADCAST_CONNECTION: reverb
+      WATCHPACK_POLLING: "true"
+      GOTENBERG_URL: http://gotenberg:3000
+      FFMPEG_URL: http://ffmpeg:9090
+      REVERB_APP_ID: "326162"
+      REVERB_APP_KEY: "uq8zbsjhgcajsmdiwhc8"
+      REVERB_APP_SECRET: "u0shs2anhgao3uikmlbq"
+      REVERB_PORT: "9000"
+      REVERB_SCHEME: "http"
+      REVERB_HOST: reverb
+      PUSHER_HOST: reverb
+      PUSHER_APP_ID: "326162"
+      PUSHER_APP_KEY: "uq8zbsjhgcajsmdiwhc8"
+      PUSHER_APP_SECRET: "u0shs2anhgao3uikmlbq"
+      PUSHER_PORT: "9000"
+      PUSHER_SCHEME: "http"
+    depends_on:
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+      seaweedfs:
+        condition: service_started
+      seaweedfs-bootstrap:
+        condition: service_completed_successfully
+    command: php artisan schedule:work
     networks:
       - hive-network
 
@@ -339,6 +409,8 @@ services:
     restart: unless-stopped
     ports:
       - "9000:9000" # Expose Reverb to your local browser
+    volumes:
+      - hive-backend-storage:/var/www/html/storage
     environment:
       APP_NAME: "Hive ERP"
       APP_ENV: local
@@ -416,3 +488,4 @@ volumes:
   hive-db-data:
   hive-search-data:
   hive-seaweedfs-data:
+  hive-backend-storage:

@@ -73,7 +73,7 @@ fail() {
   echo "Compose status:" >&2
   compose ps -a >&2 || true
 
-  for service in backend frontend queue reverb caddy ffmpeg seaweedfs-bootstrap meilisearch; do
+  for service in backend frontend queue reverb caddy ffmpeg seaweedfs-bootstrap meilisearch scheduler db-backup; do
     log_service "${service}" 100
   done
 
@@ -437,7 +437,7 @@ COMPOSE_QUIET=1 compose config >/tmp/hive-compose-config.yml
 
 echo "Pulling remote production images..."
 DEPLOY_STEP="Pulling remote production images"
-compose pull backend queue reverb frontend prometheus grafana node-exporter cadvisor
+compose pull backend queue reverb scheduler frontend prometheus grafana node-exporter cadvisor
 
 echo "Building production images..."
 for service in caddy ffmpeg; do
@@ -448,7 +448,7 @@ ensure_post_build_disk_space
 
 echo "Starting dependencies..."
 DEPLOY_STEP="Starting dependency services"
-compose up -d --remove-orphans redis db seaweedfs seaweedfs-bootstrap meilisearch rembg gotenberg ffmpeg
+compose up -d --remove-orphans redis db db-backup seaweedfs seaweedfs-bootstrap meilisearch rembg gotenberg ffmpeg
 
 DEPLOY_STEP="Waiting for redis"
 wait_for_service redis
@@ -533,12 +533,14 @@ fi
 
 echo "Starting app services..."
 DEPLOY_STEP="Starting app services"
-compose up -d queue reverb frontend prometheus grafana node-exporter cadvisor caddy
+compose up -d queue reverb scheduler frontend prometheus grafana node-exporter cadvisor caddy
 
 DEPLOY_STEP="Waiting for queue"
 wait_for_service queue
 DEPLOY_STEP="Waiting for reverb"
 wait_for_service reverb
+DEPLOY_STEP="Waiting for scheduler"
+wait_for_service scheduler
 DEPLOY_STEP="Waiting for frontend"
 wait_for_service frontend
 DEPLOY_STEP="Waiting for prometheus"

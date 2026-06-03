@@ -40,6 +40,11 @@ services:
         condition: service_started
     networks:
       - hive-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # Cache
   redis:
@@ -56,6 +61,11 @@ services:
       start_period: 5s
     networks:
       - hive-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # Database
   db:
@@ -86,6 +96,40 @@ services:
       start_period: 10s
     networks:
       - hive-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # PostgreSQL Backup Sidecar
+  db-backup:
+    image: prodrigestivill/postgres-backup-local:17-alpine
+    container_name: hive-db-backup
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_HOST=db
+      - POSTGRES_DB=${DB_DATABASE:-hive}
+      - POSTGRES_USER=${DB_USERNAME:-hive}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - BACKUP_KEEP_DAYS=7
+      - BACKUP_KEEP_WEEKS=4
+      - BACKUP_KEEP_MONTHS=6
+      - SCHEDULER_VOLUME_NAME=db-backups
+    volumes:
+      - ./storage/db-backups:/backups
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - hive-network
 
   # Object Storage
   seaweedfs:
@@ -103,6 +147,11 @@ services:
       - "9333"
     networks:
       - hive-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   seaweedfs-bootstrap:
     image: minio/mc:latest
@@ -124,6 +173,11 @@ services:
       "
     networks:
       - hive-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   seaweedfs-browser:
     image: cloudlena/s3manager:v0.5.0
@@ -149,6 +203,11 @@ services:
         condition: service_completed_successfully
     networks:
       - hive-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # Search
   meilisearch:
@@ -170,6 +229,16 @@ services:
       start_period: 10s
     networks:
       - hive-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1.5G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # AI Background Removal
   rembg:
@@ -181,6 +250,16 @@ services:
       - "5000"
     networks:
       - hive-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1.5G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # Media Converter
   ffmpeg:
@@ -204,6 +283,16 @@ services:
       start_period: 20s
     networks:
       - hive-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1.5G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # PDF and Document Converter
   gotenberg:
@@ -214,6 +303,16 @@ services:
       - "3000"
     networks:
       - hive-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1.5G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # Laravel Backend
   backend:
@@ -222,6 +321,13 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    volumes:
+      - ./storage/app-storage:/var/www/html/storage
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       APP_ENV: production
       OCTANE_SERVER: roadrunner
@@ -303,6 +409,13 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    volumes:
+      - ./storage/app-storage:/var/www/html/storage
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       APP_ENV: production
       ROOT_DOMAIN: ${ROOT_DOMAIN:-gulfingot.com}
@@ -348,6 +461,65 @@ services:
     networks:
       - hive-network
 
+  # Central scheduler
+  scheduler:
+    image: ghcr.io/techiveet/hive-os-backend:latest
+    container_name: hive-scheduler
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      APP_ENV: production
+      ROOT_DOMAIN: ${ROOT_DOMAIN:-gulfingot.com}
+      FRONTEND_DOMAIN: ${FRONTEND_DOMAIN:-hive.gulfingot.com}
+      BACKEND_DOMAIN: ${BACKEND_DOMAIN:-hive-backend.gulfingot.com}
+      REVERB_DOMAIN: ${REVERB_DOMAIN:-hive-ws.gulfingot.com}
+      HORIZON_DOMAIN: ${HORIZON_DOMAIN:-hive-queue.gulfingot.com}
+      DB_HOST: ${DB_INTERNAL_HOST:-db}
+      DB_INTERNAL_HOST: ${DB_INTERNAL_HOST:-db}
+      REDIS_CLIENT: predis
+      REDIS_HOST: ${REDIS_INTERNAL_HOST:-redis}
+      REDIS_INTERNAL_HOST: ${REDIS_INTERNAL_HOST:-redis}
+      MEILISEARCH_HOST: ${MEILISEARCH_INTERNAL_URL:-http://meilisearch:7700}
+      MEILISEARCH_INTERNAL_URL: ${MEILISEARCH_INTERNAL_URL:-http://meilisearch:7700}
+      BROADCAST_CONNECTION: ${BROADCAST_CONNECTION:-reverb}
+      REVERB_APP_ID: ${REVERB_APP_ID}
+      REVERB_APP_KEY: ${REVERB_APP_KEY}
+      REVERB_APP_SECRET: ${REVERB_APP_SECRET}
+      REVERB_HOST: reverb
+      REVERB_PORT: ${REVERB_PORT:-9000}
+      REVERB_SCHEME: ${REVERB_SCHEME:-http}
+      PUSHER_HOST: reverb
+    depends_on:
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+      seaweedfs:
+        condition: service_started
+      seaweedfs-bootstrap:
+        condition: service_completed_successfully
+      meilisearch:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    volumes:
+      - ./storage/app-storage:/var/www/html/storage
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    command: >
+      sh -lc '
+        mkdir -p storage/logs storage/framework/cache storage/framework/sessions storage/framework/views bootstrap/cache &&
+        (chown -R www-data:www-data storage bootstrap/cache 2>/dev/null || true) &&
+        chmod -R ug+rwX storage bootstrap/cache &&
+        php artisan schedule:work
+      '
+    networks:
+      - hive-network
+
   # WebSocket Engine
   reverb:
     image: ghcr.io/techiveet/hive-os-backend:latest
@@ -355,6 +527,13 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    volumes:
+      - ./storage/app-storage:/var/www/html/storage
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       APP_ENV: production
       ROOT_DOMAIN: ${ROOT_DOMAIN:-gulfingot.com}
@@ -401,6 +580,11 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       SERVER_IP: ${SERVER_IP:-}
       ROOT_DOMAIN: ${ROOT_DOMAIN:-gulfingot.com}
@@ -465,6 +649,11 @@ services:
       - "9090"
     networks:
       - hive-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # Monitoring: Grafana Dashboard
   grafana:
@@ -472,8 +661,13 @@ services:
     container_name: hive-grafana
     restart: unless-stopped
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
       - GF_USERS_ALLOW_SIGN_UP=false
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     volumes:
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./storage/grafana-data:/var/lib/grafana
@@ -501,6 +695,11 @@ services:
       - "9100"
     networks:
       - hive-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # Monitoring Exporter: Container Metrics
   cadvisor:
@@ -517,6 +716,11 @@ services:
       - "8080"
     networks:
       - hive-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 networks:
   hive-network:

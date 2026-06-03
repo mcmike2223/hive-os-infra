@@ -56,6 +56,8 @@ echo "== Wipe database, Meilisearch index data, uploaded object storage, runtime
 rm -rf storage/db-data
 rm -rf storage/search-data
 rm -rf storage/seaweedfs-data
+rm -rf storage/db-backups
+rm -rf storage/app-storage
 rm -rf backend/storage/framework/cache/*
 rm -rf backend/storage/framework/sessions/*
 rm -rf backend/storage/framework/views/*
@@ -66,6 +68,8 @@ mkdir -p \
   storage/db-data \
   storage/search-data \
   storage/seaweedfs-data \
+  storage/db-backups \
+  storage/app-storage \
   storage/caddy_runtime \
   storage/caddy_data \
   storage/caddy_config \
@@ -85,7 +89,7 @@ echo "== Rebuild images cleanly =="
 $COMPOSE build --progress plain caddy backend queue reverb frontend ffmpeg
 
 echo "== Start dependencies =="
-$COMPOSE up -d redis db seaweedfs seaweedfs-bootstrap meilisearch rembg gotenberg ffmpeg
+$COMPOSE up -d redis db db-backup seaweedfs seaweedfs-bootstrap meilisearch rembg gotenberg ffmpeg
 
 # Helper function to check container health natively via Docker
 wait_for_service() {
@@ -203,10 +207,10 @@ $COMPOSE exec -T backend php artisan optimize:clear
 $COMPOSE exec -T backend php artisan config:cache
 $COMPOSE exec -T backend php artisan view:cache
 
-echo "== Start app services =="
-$COMPOSE up -d queue reverb frontend prometheus grafana node-exporter cadvisor caddy
+$COMPOSE up -d queue reverb scheduler frontend prometheus grafana node-exporter cadvisor caddy
 wait_for_service queue
 wait_for_service reverb
+wait_for_service scheduler
 wait_for_service frontend
 wait_for_service prometheus
 wait_for_service grafana
@@ -221,7 +225,7 @@ $COMPOSE exec -T backend php artisan horizon:terminate || true
 $COMPOSE exec -T backend php artisan horizon:clear || true
 
 echo "== Restart frontend/backend/queue/reverb/caddy/monitoring =="
-$COMPOSE restart frontend backend queue reverb prometheus grafana node-exporter cadvisor caddy
+$COMPOSE restart frontend backend queue reverb scheduler prometheus grafana node-exporter cadvisor caddy
 
 echo "== Final status =="
 $COMPOSE ps
