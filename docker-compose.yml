@@ -449,7 +449,7 @@ services:
         condition: service_started
       seaweedfs-bootstrap:
         condition: service_completed_successfully
-    command: php artisan reverb:start --host=0.0.0.0 --port=9000
+    command: php artisan reverb:start --host=0.0.0.0 --port=9000 --debug
     networks:
       - hive-network
 
