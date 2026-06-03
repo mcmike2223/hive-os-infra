@@ -350,6 +350,8 @@ services:
       seaweedfs-bootstrap:
         condition: service_completed_successfully
     command: php artisan schedule:work
+    volumes:
+      - hive-backend-storage:/var/www/html/storage
     networks:
       - hive-network
 
