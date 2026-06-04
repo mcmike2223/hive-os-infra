@@ -520,6 +520,9 @@ DEPLOY_STEP="Caching Laravel views"
 compose exec -T backend mkdir -p /var/www/html/Modules/Subscription/app/resources/views || true
 compose exec -T backend php artisan view:cache
 
+DEPLOY_STEP="Reloading Octane workers"
+compose exec -T backend php artisan octane:reload || true
+
 if [ "$(get_env_value SCOUT_DRIVER)" = "meilisearch" ]; then
   echo "Meilisearch is enabled."
 
