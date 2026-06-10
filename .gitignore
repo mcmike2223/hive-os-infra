@@ -22,3 +22,9 @@
 # Logs
 *.log
 
+
+# Generated 'docker compose config' dumps — contain resolved secrets, never commit
+config_dump.yml
+current_config.yml
+compose_config.yml
+compose_config*.yml
