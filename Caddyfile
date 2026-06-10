@@ -15,8 +15,13 @@
 		# Permissions policy
 		Permissions-Policy "geolocation=(), microphone=(), camera=()"
 
-		# Content Security Policy (Optimized for Next.js & Laravel)
-		Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https://* blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://* wss://*; frame-ancestors 'self'; upgrade-insecure-requests;"
+		# Content Security Policy (Next.js + Laravel).
+		# Wildcards are scoped to the platform root domain instead of "https://*"
+		# so an injected script cannot load from / exfiltrate to an arbitrary host.
+		# 'unsafe-eval' is retained because the editor (Monaco) and WASM tooling
+		# (pdfjs, ffmpeg, background-removal) require it; migrate to nonce + 'wasm-unsafe-eval'
+		# once the frontend emits per-request nonces.
+		Content-Security-Policy "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https://*.{$ROOT_DOMAIN:gulfingot.com}; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://*.{$ROOT_DOMAIN:gulfingot.com} wss://*.{$ROOT_DOMAIN:gulfingot.com}; worker-src 'self' blob:; frame-src 'self' blob:; upgrade-insecure-requests;"
 
 		# Remove identifying headers
 		-X-Powered-By
@@ -37,12 +42,6 @@
 	reverse_proxy frontend:3000
 }
 
-{$GRAFANA_DOMAIN} {
-	import security
-	encode zstd gzip
-	reverse_proxy grafana:3000
-}
-
 {$BACKEND_DOMAIN} {
 	import security
 	encode zstd gzip
@@ -61,21 +60,10 @@
 	reverse_proxy backend:8000
 }
 
-{$MEILISEARCH_DOMAIN} {
-	import security
-	encode zstd gzip
-	reverse_proxy meilisearch:7700
-}
-
-{$REMBG_DOMAIN} {
-	encode zstd gzip
-	reverse_proxy rembg:5000
-}
-
-{$GOTENBERG_DOMAIN} {
-	encode zstd gzip
-	reverse_proxy gotenberg:3000
-}
+# NOTE: Meilisearch, Grafana, rembg and gotenberg are intentionally NOT exposed
+# publicly. The application reaches them over the private Docker network
+# (*_INTERNAL_URL). Grafana/Meilisearch are reachable for ops via the
+# 127.0.0.1-bound host ports declared in docker-compose.prod.yml (use an SSH tunnel).
 
 https:// {
 	import security

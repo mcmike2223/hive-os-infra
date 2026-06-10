@@ -19,8 +19,12 @@
 		# Permissions policy
 		Permissions-Policy "geolocation=(), microphone=(), camera=()"
 
-		# Content Security Policy (Optimized for Next.js & Laravel)
-		Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https://* blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://* wss://*; frame-ancestors 'self'; upgrade-insecure-requests;"
+		# Content Security Policy (Next.js + Laravel).
+		# Wildcards scoped to the platform root domain instead of "https://*" so an
+		# injected script cannot load from / exfiltrate to an arbitrary host.
+		# 'unsafe-eval' retained for Monaco editor + WASM tooling (pdfjs/ffmpeg/bg-removal);
+		# migrate to nonce + 'wasm-unsafe-eval' once the frontend emits per-request nonces.
+		Content-Security-Policy "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https://*.{$ROOT_DOMAIN:gulfingot.com}; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://*.{$ROOT_DOMAIN:gulfingot.com} wss://*.{$ROOT_DOMAIN:gulfingot.com}; worker-src 'self' blob:; frame-src 'self' blob:; upgrade-insecure-requests;"
 
 		# Remove identifying headers
 		-X-Powered-By
@@ -95,22 +99,6 @@
 	reverse_proxy backend:8000
 }
 
-{$MEILISEARCH_DOMAIN:hive-search.gulfingot.com} {
-	import security
-	tls {
-		dns cloudflare {env.CF_API_TOKEN}
-		resolvers 1.1.1.1 1.0.0.1
-	}
-
-	reverse_proxy meilisearch:7700
-}
-
-{$GRAFANA_DOMAIN:hive-monitor.gulfingot.com} {
-	import security
-	tls {
-		dns cloudflare {env.CF_API_TOKEN}
-		resolvers 1.1.1.1 1.0.0.1
-	}
-
-	reverse_proxy grafana:3000
-}
+# Meilisearch and Grafana are intentionally NOT exposed publicly. The app reaches
+# them over the private Docker network; for ops, use the 127.0.0.1-bound host ports
+# from docker-compose.prod.yml via an SSH tunnel.

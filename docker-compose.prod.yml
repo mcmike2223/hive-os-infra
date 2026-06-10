@@ -51,6 +51,11 @@ services:
     image: redis:alpine
     container_name: hive-redis
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 768M
     expose:
       - "6379"
     healthcheck:
@@ -72,6 +77,11 @@ services:
     image: postgres:17-alpine
     container_name: hive-db
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
     ports:
       - "127.0.0.1:${DB_HOST_PORT:-5432}:5432"
     env_file:
@@ -131,6 +141,54 @@ services:
     networks:
       - hive-network
 
+  # Off-site Backup Sync (opt-in)
+  # Mirrors the local ./storage/db-backups dir to a remote S3-compatible bucket
+  # so a host/disk failure does not lose the backups. Enable with:
+  #   docker compose -f docker-compose.prod.yml --profile backup-offsite up -d
+  # after filling in the BACKUP_REMOTE_* vars in .env.
+  db-backup-offsite:
+    image: minio/mc:latest
+    container_name: hive-db-backup-offsite
+    restart: unless-stopped
+    profiles:
+      - backup-offsite
+    environment:
+      # Plain interpolation (not ${VAR:?...}) so an unset value never blocks the
+      # main stack — interpolation is evaluated for the whole file before profiles
+      # are filtered. The entrypoint guards against missing values instead.
+      BACKUP_REMOTE_ENDPOINT: ${BACKUP_REMOTE_ENDPOINT:-}
+      BACKUP_REMOTE_ACCESS_KEY: ${BACKUP_REMOTE_ACCESS_KEY:-}
+      BACKUP_REMOTE_SECRET_KEY: ${BACKUP_REMOTE_SECRET_KEY:-}
+      BACKUP_REMOTE_BUCKET: ${BACKUP_REMOTE_BUCKET:-}
+      BACKUP_SYNC_INTERVAL: ${BACKUP_SYNC_INTERVAL:-21600}
+    volumes:
+      - ./storage/db-backups:/backups:ro
+    entrypoint: >
+      /bin/sh -ec '
+        if [ -z "$${BACKUP_REMOTE_ENDPOINT}" ] || [ -z "$${BACKUP_REMOTE_ACCESS_KEY}" ] || [ -z "$${BACKUP_REMOTE_SECRET_KEY}" ] || [ -z "$${BACKUP_REMOTE_BUCKET}" ]; then
+          echo "offsite-backup: BACKUP_REMOTE_* not configured; idling."; exec sleep infinity;
+        fi;
+        until mc alias set offsite "$${BACKUP_REMOTE_ENDPOINT}" "$${BACKUP_REMOTE_ACCESS_KEY}" "$${BACKUP_REMOTE_SECRET_KEY}" >/dev/null 2>&1; do
+          echo "offsite-backup: waiting for remote endpoint..."; sleep 10;
+        done;
+        mc mb --ignore-existing "offsite/$${BACKUP_REMOTE_BUCKET}" >/dev/null 2>&1 || true;
+        while true; do
+          echo "offsite-backup: mirroring local backups to remote...";
+          mc mirror --overwrite /backups "offsite/$${BACKUP_REMOTE_BUCKET}" || echo "offsite-backup: mirror failed, will retry";
+          sleep "$${BACKUP_SYNC_INTERVAL}";
+        done
+      '
+    depends_on:
+      db-backup:
+        condition: service_started
+    networks:
+      - hive-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   # Object Storage
   seaweedfs:
     image: chrislusf/seaweedfs:3.94
@@ -139,7 +197,7 @@ services:
     command: server -dir=/data -s3
     environment:
       AWS_ACCESS_KEY_ID: ${SEAWEEDFS_ACCESS_KEY:-hive-seaweedfs}
-      AWS_SECRET_ACCESS_KEY: ${SEAWEEDFS_SECRET_KEY:-change-this-seaweedfs-secret}
+      AWS_SECRET_ACCESS_KEY: ${SEAWEEDFS_SECRET_KEY:?SEAWEEDFS_SECRET_KEY must be set in .env}
     volumes:
       - ./storage/seaweedfs-data:/data
     expose:
@@ -162,7 +220,7 @@ services:
         condition: service_started
     environment:
       SEAWEEDFS_ACCESS_KEY: ${SEAWEEDFS_ACCESS_KEY:-hive-seaweedfs}
-      SEAWEEDFS_SECRET_KEY: ${SEAWEEDFS_SECRET_KEY:-change-this-seaweedfs-secret}
+      SEAWEEDFS_SECRET_KEY: ${SEAWEEDFS_SECRET_KEY:?SEAWEEDFS_SECRET_KEY must be set in .env}
       SEAWEEDFS_BUCKET: ${SEAWEEDFS_BUCKET:-hive-production}
     entrypoint: >
       /bin/sh -ec "
@@ -191,7 +249,7 @@ services:
       ENDPOINT: seaweedfs:8333
       REGION: us-east-1
       ACCESS_KEY_ID: ${SEAWEEDFS_ACCESS_KEY:-hive-seaweedfs}
-      SECRET_ACCESS_KEY: ${SEAWEEDFS_SECRET_KEY:-change-this-seaweedfs-secret}
+      SECRET_ACCESS_KEY: ${SEAWEEDFS_SECRET_KEY:?SEAWEEDFS_SECRET_KEY must be set in .env}
       USE_SSL: "false"
       SIGNATURE_TYPE: V4
       FORCE_DOWNLOAD: "false"
@@ -215,8 +273,11 @@ services:
     container_name: hive-search
     restart: unless-stopped
     environment:
-      MEILI_MASTER_KEY: ${MEILISEARCH_KEY:-masterKey}
+      MEILI_MASTER_KEY: ${MEILISEARCH_KEY:?MEILISEARCH_KEY must be set in .env}
       MEILI_NO_ANALYTICS: "true"
+    # Not exposed publicly via Caddy. Reach it over an SSH tunnel to this localhost port.
+    ports:
+      - "127.0.0.1:${MEILISEARCH_HOST_PORT:-7700}:7700"
     volumes:
       - ./storage/search-data:/meili_data
     expose:
@@ -319,6 +380,11 @@ services:
     image: ghcr.io/techiveet/hive-os-backend:latest
     container_name: hive-backend
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
     env_file:
       - .env
     volumes:
@@ -407,6 +473,11 @@ services:
     image: ghcr.io/techiveet/hive-os-backend:latest
     container_name: hive-queue
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
     env_file:
       - .env
     volumes:
@@ -466,6 +537,11 @@ services:
     image: ghcr.io/techiveet/hive-os-backend:latest
     container_name: hive-scheduler
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
     env_file:
       - .env
     environment:
@@ -525,6 +601,11 @@ services:
     image: ghcr.io/techiveet/hive-os-backend:latest
     container_name: hive-reverb
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
     env_file:
       - .env
     volumes:
@@ -661,7 +742,7 @@ services:
     container_name: hive-grafana
     restart: unless-stopped
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD must be set in .env}
       - GF_USERS_ALLOW_SIGN_UP=false
     logging:
       driver: "json-file"
@@ -671,6 +752,9 @@ services:
     volumes:
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./storage/grafana-data:/var/lib/grafana
+    # Not exposed publicly via Caddy. Reach it over an SSH tunnel to this localhost port.
+    ports:
+      - "127.0.0.1:${GRAFANA_HOST_PORT:-3001}:3000"
     expose:
       - "3000"
     depends_on:
