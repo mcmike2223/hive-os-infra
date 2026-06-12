@@ -18,40 +18,18 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Setup SSH Key
+      # Infra (compose / Caddyfile) is file-based, not an image, so it is NOT
+      # auto-pulled like the backend/frontend. SSH from GitHub runners to the VPS
+      # is also blocked by the Hetzner Cloud Firewall (we keep SSH closed to the
+      # public on purpose). So infra changes are applied MANUALLY on the VPS:
+      #
+      #   cd ~/projects/hive
+      #   # copy the changed Caddyfile / docker-compose.prod.yml into place, then:
+      #   bash scripts/deploy-prod.sh        # full deploy
+      #   # or reload Caddy only:  docker exec hive-caddy caddy reload --config /etc/caddy/Caddyfile
+      #
+      # See deploy/README.md for the pull-based image deploy (backend/frontend).
+      - name: Infra apply note
         run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -H ${{ secrets.VPS_HOST_IP }} >> ~/.ssh/known_hosts
-
-      - name: Sync infra files to VPS
-        run: |
-          rsync -az --delete \
-            --exclude='.git/' \
-            --exclude='storage/' \
-            --exclude='.env' \
-            ./ ${{ secrets.VPS_SSH_USER }}@${{ secrets.VPS_HOST_IP }}:~/projects/hive/
-
-      - name: Configure GHCR credentials on VPS
-        env:
-          GHCR_TOKEN: ${{ secrets.VPS_GHCR_TOKEN }}
-          GHCR_USER: ${{ secrets.VPS_GHCR_USER }}
-        run: |
-          # Build a valid docker config.json on the runner, then scp it to the VPS.
-          # This avoids all shell-quoting issues when passing JSON through SSH.
-          AUTH=$(printf '%s:%s' "${GHCR_USER}" "${GHCR_TOKEN}" | base64 -w 0)
-          mkdir -p /tmp/ghcr-creds
-          printf '{"auths":{"ghcr.io":{"auth":"%s"}}}\n' "${AUTH}" > /tmp/ghcr-creds/config.json
-          # Ensure the remote .docker dir exists
-          ssh ${{ secrets.VPS_SSH_USER }}@${{ secrets.VPS_HOST_IP }} "mkdir -p ~/.docker"
-          # Copy the file cleanly — no shell quoting of JSON content
-          scp /tmp/ghcr-creds/config.json \
-            ${{ secrets.VPS_SSH_USER }}@${{ secrets.VPS_HOST_IP }}:~/.docker/config.json
-          ssh ${{ secrets.VPS_SSH_USER }}@${{ secrets.VPS_HOST_IP }} \
-            "chmod 600 ~/.docker/config.json && docker pull ghcr.io/${{ secrets.VPS_GHCR_USER }}/hive-os-backend:latest 2>&1 | tail -3"
-
-      - name: Run deploy script on VPS
-        run: |
-          ssh ${{ secrets.VPS_SSH_USER }}@${{ secrets.VPS_HOST_IP }} \
-            "cd ~/projects/hive && chmod +x scripts/deploy-prod.sh && bash scripts/deploy-prod.sh"
+          echo "Infra changes are applied manually on the VPS (SSH from runners is firewall-blocked)."
+          echo "See deploy/README.md. Apply with scripts/deploy-prod.sh on the host."
