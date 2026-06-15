@@ -106,3 +106,10 @@ erp.harrawefarm.com {
 		reverse_proxy 78.47.138.239:8088
 	}
 }
+
+# Techive ERP Legacy (Aqua Uno) Routing
+erp.aqua-uno.com {
+	encode zstd gzip
+	reverse_proxy 78.47.138.239:8085
+}
+
