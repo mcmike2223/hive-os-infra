@@ -27,8 +27,13 @@ FIMG=ghcr.io/techiveet/hive-os-frontend:latest
 b_run=$(docker inspect --format '{{.Image}}' hive-backend 2>/dev/null)
 f_run=$(docker inspect --format '{{.Image}}' hive-frontend 2>/dev/null)
 
-# refresh manifests (cheap when unchanged)
-$COMPOSE pull backend frontend >/dev/null 2>&1
+# refresh manifests (cheap when unchanged). Do NOT silence this: a failed pull
+# (expired GHCR login, full disk, etc.) must be visible in the log, otherwise the
+# digest comparison below just sees the stale local image and reports "no change"
+# forever — hiding a broken registry login behind a healthy-looking deploy loop.
+if ! $COMPOSE pull backend frontend; then
+  echo ">> WARNING: 'compose pull' failed (registry auth / disk / network?) — falling back to whatever images are already local. Run 'docker login ghcr.io' if this is an auth error."
+fi
 
 b_new=$(docker image inspect "$BIMG" --format '{{.Id}}' 2>/dev/null)
 f_new=$(docker image inspect "$FIMG" --format '{{.Id}}' 2>/dev/null)
