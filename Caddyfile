@@ -113,3 +113,11 @@ erp.aqua-uno.com {
 	reverse_proxy 78.47.138.239:8085
 }
 
+dejen.techiveet.com {
+	handle /app/* {
+		reverse_proxy 78.47.138.239:8080
+	}
+	handle {
+		reverse_proxy 78.47.138.239:8086
+	}
+}
