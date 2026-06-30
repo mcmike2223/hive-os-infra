@@ -377,7 +377,7 @@ services:
 
   # Laravel Backend
   backend:
-    image: ghcr.io/techiveet/hive-os-backend:latest
+    image: ghcr.io/mcmike2223/hive-os-backend:latest
     container_name: hive-backend
     restart: unless-stopped
     deploy:
@@ -470,7 +470,7 @@ services:
 
   # Queue Worker / Horizon
   queue:
-    image: ghcr.io/techiveet/hive-os-backend:latest
+    image: ghcr.io/mcmike2223/hive-os-backend:latest
     container_name: hive-queue
     restart: unless-stopped
     deploy:
@@ -534,7 +534,7 @@ services:
 
   # Central scheduler
   scheduler:
-    image: ghcr.io/techiveet/hive-os-backend:latest
+    image: ghcr.io/mcmike2223/hive-os-backend:latest
     container_name: hive-scheduler
     restart: unless-stopped
     deploy:
@@ -598,7 +598,7 @@ services:
 
   # WebSocket Engine
   reverb:
-    image: ghcr.io/techiveet/hive-os-backend:latest
+    image: ghcr.io/mcmike2223/hive-os-backend:latest
     container_name: hive-reverb
     restart: unless-stopped
     deploy:
@@ -656,7 +656,7 @@ services:
 
   # Next.js Frontend
   frontend:
-    image: ghcr.io/techiveet/hive-os-frontend:latest
+    image: ghcr.io/mcmike2223/hive-os-frontend:latest
     container_name: hive-frontend
     restart: unless-stopped
     env_file:
