@@ -132,11 +132,29 @@ erp.aqua-uno.com {
 	reverse_proxy 78.47.138.239:8085
 }
 
-dejen.techiveet.com {
+http://dejen.techiveet.com, https://dejen.techiveet.com {
 	handle /app/* {
 		reverse_proxy 78.47.138.239:8080
 	}
 	handle {
 		reverse_proxy 78.47.138.239:8086
+	}
+}
+
+http://gubae.techiveet.com, https://gubae.techiveet.com {
+	encode zstd gzip
+
+	handle /api/* {
+		reverse_proxy zoom-clone-backend:5001
+	}
+	handle /socket.io/* {
+		reverse_proxy zoom-clone-backend:5001
+	}
+	handle /health {
+		reverse_proxy zoom-clone-backend:5001
+	}
+
+	handle {
+		reverse_proxy zoom-clone-frontend:80
 	}
 }
