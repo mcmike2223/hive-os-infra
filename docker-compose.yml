@@ -158,6 +158,7 @@ services:
       APP_DEBUG: "true"
       APP_KEY: base64:c29tZXJhbmRvbXN0cmluZ2ZvcmRldmVsb3BtZW50MjE=
       APP_URL: http://localhost:8081
+      FRONTEND_URL: http://localhost:3001
       DB_CONNECTION: pgsql
       DB_HOST: db
       DB_PORT: 5432
@@ -274,6 +275,7 @@ services:
       PUSHER_APP_SECRET: "u0shs2anhgao3uikmlbq"
       PUSHER_PORT: "9000"
       PUSHER_SCHEME: "http"
+      FRONTEND_URL: http://localhost:3001
     depends_on:
       redis:
         condition: service_healthy
@@ -340,6 +342,8 @@ services:
       PUSHER_APP_SECRET: "u0shs2anhgao3uikmlbq"
       PUSHER_PORT: "9000"
       PUSHER_SCHEME: "http"
+      FRONTEND_URL: http://localhost:3001
+
     depends_on:
       redis:
         condition: service_healthy
