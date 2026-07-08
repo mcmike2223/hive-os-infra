@@ -40,7 +40,7 @@ f_new=$(docker image inspect "$FIMG" --format '{{.Id}}' 2>/dev/null)
 
 if [ -n "$b_new" ] && [ "$b_run" != "$b_new" ]; then
   echo ">> backend changed ${b_run:0:19} -> ${b_new:0:19}; deploying"
-  $COMPOSE up -d backend queue reverb
+  $COMPOSE up -d backend queue reverb scheduler
   for i in $(seq 1 24); do
     [ "$(docker inspect --format '{{.State.Health.Status}}' hive-backend 2>/dev/null)" = healthy ] && break
     sleep 5
