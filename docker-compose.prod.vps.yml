@@ -61,7 +61,7 @@ services:
     container_name: hive-db
     restart: unless-stopped
     ports:
-      - "127.0.0.1:${DB_HOST_PORT:-5432}:5432"
+      - "127.0.0.1:${DB_HOST_PORT:-5433}:5432"
     env_file:
       - .env
     environment:
