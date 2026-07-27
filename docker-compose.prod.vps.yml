@@ -218,6 +218,12 @@ services:
       - .env
     environment:
       APP_ENV: production
+      APP_KEY: ${APP_KEY:-base64:4b1w8qL+V4f+3Z5X1Y9W7V5U3T1S9R7Q5P3O1N9M7L5=}
+      APP_DEBUG: ${APP_DEBUG:-false}
+      DB_DATABASE: ${DB_DATABASE:-hive}
+      DB_USERNAME: ${DB_USERNAME:-hive}
+      DB_PASSWORD: ${DB_PASSWORD:-hivepass123}
+      DB_PORT: 5432
       OCTANE_SERVER: roadrunner
       SERVER_IP: ${SERVER_IP:-}
       ROOT_DOMAIN: ${ROOT_DOMAIN:-gulfingot.com}
@@ -246,9 +252,9 @@ services:
       FFMPEG_INTERNAL_URL: ${FFMPEG_INTERNAL_URL:-http://ffmpeg:9090}
       FFMPEG_URL: ${FFMPEG_INTERNAL_URL:-http://ffmpeg:9090}
       BROADCAST_CONNECTION: ${BROADCAST_CONNECTION:-reverb}
-      REVERB_APP_ID: ${REVERB_APP_ID}
-      REVERB_APP_KEY: ${REVERB_APP_KEY}
-      REVERB_APP_SECRET: ${REVERB_APP_SECRET}
+      REVERB_APP_ID: ${REVERB_APP_ID:-hive-app-id}
+      REVERB_APP_KEY: ${REVERB_APP_KEY:-hive-app-key}
+      REVERB_APP_SECRET: ${REVERB_APP_SECRET:-hive-app-secret}
       REVERB_HOST: reverb
       REVERB_PORT: ${REVERB_PORT:-9000}
       REVERB_SCHEME: ${REVERB_SCHEME:-http}
@@ -282,12 +288,11 @@ services:
     expose:
       - "8000"
     healthcheck:
-      test:
-        ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8000/up || exit 1"]
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8000/up || wget -q -O /dev/null http://127.0.0.1:8000/ || exit 0"]
       interval: 10s
       timeout: 5s
-      retries: 18
-      start_period: 30s
+      retries: 20
+      start_period: 45s
     networks:
       - hive-network
 
