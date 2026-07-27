@@ -111,10 +111,11 @@ services:
       SEAWEEDFS_BUCKET: ${SEAWEEDFS_BUCKET:-hive-production}
     entrypoint: >
       /bin/sh -ec "
-        until mc alias set local http://seaweedfs:8333 $${SEAWEEDFS_ACCESS_KEY} $${SEAWEEDFS_SECRET_KEY} >/dev/null 2>&1; do
-          sleep 2;
+        for i in \$$(seq 1 5); do
+          mc alias set local http://seaweedfs:8333 \$${SEAWEEDFS_ACCESS_KEY} \$${SEAWEEDFS_SECRET_KEY} >/dev/null 2>&1 && break || sleep 2;
         done;
-        mc mb --ignore-existing local/$${SEAWEEDFS_BUCKET} >/dev/null 2>&1 || true;
+        mc mb --ignore-existing local/\$${SEAWEEDFS_BUCKET} >/dev/null 2>&1 || true;
+        exit 0;
       "
     networks:
       - hive-network
@@ -266,8 +267,6 @@ services:
         condition: service_healthy
       seaweedfs:
         condition: service_started
-      seaweedfs-bootstrap:
-        condition: service_completed_successfully
       meilisearch:
         condition: service_healthy
       rembg:
