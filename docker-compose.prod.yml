@@ -422,6 +422,7 @@ services:
       REMBG_INTERNAL_URL: ${REMBG_INTERNAL_URL:-http://rembg:5000}
       GOTENBERG_INTERNAL_URL: ${GOTENBERG_INTERNAL_URL:-http://gotenberg:3000}
       FFMPEG_INTERNAL_URL: ${FFMPEG_INTERNAL_URL:-http://ffmpeg:9090}
+      FFMPEG_URL: ${FFMPEG_INTERNAL_URL:-http://ffmpeg:9090}
       BROADCAST_CONNECTION: ${BROADCAST_CONNECTION:-reverb}
       REVERB_APP_ID: ${REVERB_APP_ID}
       REVERB_APP_KEY: ${REVERB_APP_KEY}
@@ -501,6 +502,7 @@ services:
       REDIS_INTERNAL_HOST: ${REDIS_INTERNAL_HOST:-redis}
       MEILISEARCH_HOST: ${MEILISEARCH_INTERNAL_URL:-http://meilisearch:7700}
       MEILISEARCH_INTERNAL_URL: ${MEILISEARCH_INTERNAL_URL:-http://meilisearch:7700}
+      FFMPEG_URL: ${FFMPEG_INTERNAL_URL:-http://ffmpeg:9090}
       BROADCAST_CONNECTION: ${BROADCAST_CONNECTION:-reverb}
       REVERB_APP_ID: ${REVERB_APP_ID}
       REVERB_APP_KEY: ${REVERB_APP_KEY}
@@ -521,6 +523,8 @@ services:
       meilisearch:
         condition: service_healthy
       backend:
+        condition: service_healthy
+      ffmpeg:
         condition: service_healthy
     command: >
       sh -lc '

@@ -11,8 +11,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python deps
-RUN pip install --no-cache-dir flask gunicorn
+# Install media and computer-vision dependencies. OpenCV is kept headless so
+# the service stays small and does not pull desktop GUI libraries.
+RUN pip install --no-cache-dir \
+    flask \
+    gunicorn \
+    "numpy>=2.0,<3" \
+    "opencv-python-headless>=4.10,<5"
 
 WORKDIR /app
 COPY server.py .

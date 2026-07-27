@@ -39,7 +39,7 @@ services:
     container_name: hive-search
     restart: unless-stopped
     ports:
-      - "7700:7700"
+      - "7200:7700"
     environment:
       - MEILI_MASTER_KEY=masterKey
       - MEILI_NO_ANALYTICS=true
@@ -59,8 +59,8 @@ services:
     container_name: hive-mailpit
     restart: unless-stopped
     ports:
-      - "1025:1025" # SMTP Port
-      - "8025:8025" # Web Dashboard Port
+      - "1125:1025" # SMTP Port
+      - "8085:8025" # Web Dashboard Port
     networks:
       - hive-network
 
@@ -141,7 +141,7 @@ services:
     networks:
       - hive-network
 
-  # 7. THE BRAIN (Laravel 12 + Octane)
+  # 7. THE BRAIN (Laravel 13 + Octane)
   backend:
     build:
       context: ../hive-os-backend
@@ -151,6 +151,7 @@ services:
     ports:
       - "8081:8000"
     volumes:
+      - ../hive-os-backend:/var/www/html
       - hive-backend-storage:/var/www/html/storage
     environment:
       APP_NAME: "Hive ERP"
@@ -236,6 +237,7 @@ services:
     container_name: hive-queue
     restart: unless-stopped
     volumes:
+      - ../hive-os-backend:/var/www/html
       - hive-backend-storage:/var/www/html/storage
     environment:
       APP_NAME: "Hive ERP"
@@ -276,6 +278,7 @@ services:
       PUSHER_PORT: "9000"
       PUSHER_SCHEME: "http"
       FRONTEND_URL: http://localhost:3001
+      FFMPEG_URL: http://ffmpeg:9090
     depends_on:
       redis:
         condition: service_healthy
@@ -285,6 +288,8 @@ services:
         condition: service_started
       seaweedfs-bootstrap:
         condition: service_completed_successfully
+      ffmpeg:
+        condition: service_healthy
     command: php artisan horizon
     networks:
       - hive-network
