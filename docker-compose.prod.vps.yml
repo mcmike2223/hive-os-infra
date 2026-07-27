@@ -67,21 +67,17 @@ services:
     environment:
       POSTGRES_DB: ${DB_DATABASE:-hive}
       POSTGRES_USER: ${DB_USERNAME:-hive}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-hivepass123}
     volumes:
       - ./storage/db-data:/var/lib/postgresql/data
     expose:
       - "5432"
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "pg_isready -U ${DB_USERNAME:-hive} -d ${DB_DATABASE:-hive}",
-        ]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-hive}"]
       interval: 5s
       timeout: 5s
-      retries: 10
-      start_period: 10s
+      retries: 15
+      start_period: 30s
     networks:
       - hive-network
 
