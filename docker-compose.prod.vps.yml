@@ -21,9 +21,9 @@ services:
       HORIZON_DOMAIN: ${HORIZON_DOMAIN:-hive-queue.gulfingot.com}
       MEILISEARCH_DOMAIN: ${MEILISEARCH_DOMAIN:-hive-search.gulfingot.com}
       GRAFANA_DOMAIN: ${GRAFANA_DOMAIN:-hive-monitor.gulfingot.com}
-    expose:
-      - "80"
-      - "443"
+    ports:
+      - "80:80"
+      - "443:443"
     volumes:
       - ./storage/caddy_data:/data
       - ./storage/caddy_config:/config
