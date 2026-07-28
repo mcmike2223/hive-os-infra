@@ -215,6 +215,7 @@ services:
   # Laravel Backend
   backend:
     image: ghcr.io/mcmike2223/hive-os-backend:latest
+    pull_policy: always
     container_name: hive-backend
     restart: unless-stopped
     env_file:
@@ -299,6 +300,7 @@ services:
   # Queue Worker / Horizon
   queue:
     image: ghcr.io/mcmike2223/hive-os-backend:latest
+    pull_policy: always
     container_name: hive-queue
     restart: unless-stopped
     env_file:
@@ -357,6 +359,7 @@ services:
   # WebSocket Engine
   reverb:
     image: ghcr.io/mcmike2223/hive-os-backend:latest
+    pull_policy: always
     container_name: hive-reverb
     restart: unless-stopped
     env_file:
@@ -408,6 +411,7 @@ services:
   # Next.js Frontend
   frontend:
     image: ghcr.io/mcmike2223/hive-os-frontend:latest
+    pull_policy: always
     container_name: hive-frontend
     restart: unless-stopped
     env_file:
