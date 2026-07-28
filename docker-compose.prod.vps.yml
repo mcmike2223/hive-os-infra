@@ -290,6 +290,7 @@ services:
       - "8000"
     networks:
       - hive-network
+      - hive-production-data
 
   # Queue Worker / Horizon
   queue:
@@ -347,6 +348,7 @@ services:
       '
     networks:
       - hive-network
+      - hive-production-data
 
   # WebSocket Engine
   reverb:
@@ -397,6 +399,7 @@ services:
       - "9000"
     networks:
       - hive-network
+      - hive-production-data
 
   # Next.js Frontend
   frontend:
@@ -533,3 +536,6 @@ services:
 networks:
   hive-network:
     driver: bridge
+  hive-production-data:
+    external: true
+    name: hive_hive-network
