@@ -27,10 +27,39 @@ jobs:
             exit 1
           }
 
-          curl --fail-with-body --silent --show-error \
+          response="$(curl --fail-with-body --silent --show-error \
             --retry 3 \
             --retry-all-errors \
             --request GET \
             --url "https://deploy.techiveet.com/api/v1/deploy?uuid=z140ve7ehjoyuoluqk0azmwe&force=false" \
             --header "Accept: application/json" \
-            --header "Authorization: Bearer $COOLIFY_API_TOKEN"
+            --header "Authorization: Bearer $COOLIFY_API_TOKEN")"
+
+          deployment_uuid="$(jq -er '.deployments[0].deployment_uuid' <<<"$response")"
+          echo "Coolify deployment queued: $deployment_uuid"
+
+          for attempt in $(seq 1 80); do
+            status_response="$(curl --fail-with-body --silent --show-error \
+              --retry 3 \
+              --retry-all-errors \
+              --url "https://deploy.techiveet.com/api/v1/deployments/$deployment_uuid" \
+              --header "Accept: application/json" \
+              --header "Authorization: Bearer $COOLIFY_API_TOKEN")"
+            status="$(jq -er '.status' <<<"$status_response")"
+            echo "Coolify status: $status"
+
+            case "$status" in
+              finished)
+                exit 0
+                ;;
+              failed|cancelled)
+                echo "Coolify deployment did not complete successfully."
+                exit 1
+                ;;
+            esac
+
+            sleep 15
+          done
+
+          echo "Timed out waiting for Coolify deployment."
+          exit 1

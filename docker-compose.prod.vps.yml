@@ -1,6 +1,10 @@
 services:
   # Reverse Proxy
   caddy:
+    # The VPS already has a shared edge Caddy container that owns ports 80/443.
+    # Coolify must not create a second gateway during application deployments.
+    profiles:
+      - legacy-gateway
     build:
       context: .
       dockerfile: Dockerfile.caddy
