@@ -26,7 +26,6 @@ services:
       - "443:443"
       - "443:443/udp"
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./storage/caddy_data:/data
       - ./storage/caddy_config:/config
     depends_on:
