@@ -113,7 +113,7 @@ services:
           mc alias set local http://seaweedfs:8333 \$${SEAWEEDFS_ACCESS_KEY} \$${SEAWEEDFS_SECRET_KEY} >/dev/null 2>&1 && break || sleep 2;
         done;
         mc mb --ignore-existing local/\$${SEAWEEDFS_BUCKET} >/dev/null 2>&1 || true;
-        exit 0;
+        exec tail -f /dev/null
       "
     networks:
       - hive-network
