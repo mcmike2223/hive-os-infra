@@ -1,4 +1,4 @@
-name: Deploy Infra to VPS
+name: Deploy Hive to Coolify
 
 on:
   push:
@@ -13,23 +13,24 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-22.04
+    environment: production
+    permissions:
+      contents: read
 
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      # Infra (compose / Caddyfile) is file-based, not an image, so it is NOT
-      # auto-pulled like the backend/frontend. SSH from GitHub runners to the VPS
-      # is also blocked by the Hetzner Cloud Firewall (we keep SSH closed to the
-      # public on purpose). So infra changes are applied MANUALLY on the VPS:
-      #
-      #   cd ~/projects/hive
-      #   # copy the changed Caddyfile / docker-compose.prod.yml into place, then:
-      #   bash scripts/deploy-prod.sh        # full deploy
-      #   # or reload Caddy only:  docker exec hive-caddy caddy reload --config /etc/caddy/Caddyfile
-      #
-      # See deploy/README.md for the pull-based image deploy (backend/frontend).
-      - name: Infra apply note
+      - name: Request Coolify deployment
+        env:
+          COOLIFY_API_TOKEN: ${{ secrets.COOLIFY_API_TOKEN }}
         run: |
-          echo "Infra changes are applied manually on the VPS (SSH from runners is firewall-blocked)."
-          echo "See deploy/README.md. Apply with scripts/deploy-prod.sh on the host."
+          test -n "$COOLIFY_API_TOKEN" || {
+            echo "Missing COOLIFY_API_TOKEN repository secret."
+            exit 1
+          }
+
+          curl --fail-with-body --silent --show-error \
+            --retry 3 \
+            --retry-all-errors \
+            --request GET \
+            --url "https://deploy.techiveet.com/api/v1/deploy?uuid=z140ve7ehjoyuoluqk0azmwe&force=false" \
+            --header "Accept: application/json" \
+            --header "Authorization: Bearer $COOLIFY_API_TOKEN"
