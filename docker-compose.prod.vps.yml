@@ -219,10 +219,14 @@ services:
       APP_ENV: production
       APP_KEY: ${APP_KEY:-base64:4b1w8qL+V4f+3Z5X1Y9W7V5U3T1S9R7Q5P3O1N9M7L5=}
       APP_DEBUG: ${APP_DEBUG:-false}
+      DB_CONNECTION: ${DB_CONNECTION:-pgsql}
       DB_DATABASE: ${DB_DATABASE:-hive}
       DB_USERNAME: ${DB_USERNAME:-hive}
       DB_PASSWORD: ${DB_PASSWORD:-hivepass123}
       DB_PORT: 5432
+      CACHE_STORE: ${CACHE_STORE:-redis}
+      SESSION_DRIVER: ${SESSION_DRIVER:-redis}
+      QUEUE_CONNECTION: ${QUEUE_CONNECTION:-redis}
       OCTANE_SERVER: roadrunner
       SERVER_IP: ${SERVER_IP:-}
       ROOT_DOMAIN: ${ROOT_DOMAIN:-gulfingot.com}
@@ -296,6 +300,10 @@ services:
       - .env
     environment:
       APP_ENV: production
+      DB_CONNECTION: ${DB_CONNECTION:-pgsql}
+      CACHE_STORE: ${CACHE_STORE:-redis}
+      SESSION_DRIVER: ${SESSION_DRIVER:-redis}
+      QUEUE_CONNECTION: ${QUEUE_CONNECTION:-redis}
       ROOT_DOMAIN: ${ROOT_DOMAIN:-gulfingot.com}
       FRONTEND_DOMAIN: ${FRONTEND_DOMAIN:-hive.gulfingot.com}
       BACKEND_DOMAIN: ${BACKEND_DOMAIN:-hive-backend.gulfingot.com}
@@ -349,6 +357,10 @@ services:
       - .env
     environment:
       APP_ENV: production
+      DB_CONNECTION: ${DB_CONNECTION:-pgsql}
+      CACHE_STORE: ${CACHE_STORE:-redis}
+      SESSION_DRIVER: ${SESSION_DRIVER:-redis}
+      QUEUE_CONNECTION: ${QUEUE_CONNECTION:-redis}
       ROOT_DOMAIN: ${ROOT_DOMAIN:-gulfingot.com}
       BACKEND_DOMAIN: ${BACKEND_DOMAIN:-hive-backend.gulfingot.com}
       REVERB_DOMAIN: ${REVERB_DOMAIN:-hive-ws.gulfingot.com}
