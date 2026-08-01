@@ -59,7 +59,7 @@ services:
     container_name: hive-mailpit
     restart: unless-stopped
     ports:
-      - "1125:1025" # SMTP Port
+      - "11025:1025" # SMTP Port
       - "8085:8025" # Web Dashboard Port
     networks:
       - hive-network
