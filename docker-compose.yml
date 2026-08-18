@@ -148,6 +148,12 @@ services:
       dockerfile: Dockerfile
     container_name: hive-backend
     restart: unless-stopped
+    # Rebuild the Laradocs search index on boot (see ../hive-os-backend/docker/entrypoint.sh)
+    # so a Docker restart never leaves /hivedocs search empty. Matches the image
+    # ENTRYPOINT in ../hive-os-backend/Dockerfile; overridden here so the live
+    # stack gets it without an image rebuild.
+    # WSL bind mounts don't honor the exec bit, so run the script via sh.
+    entrypoint: ["sh", "/var/www/html/docker/entrypoint.sh"]
     ports:
       - "8081:8000"
     volumes:
@@ -225,8 +231,26 @@ services:
     networks:
       hive-network:
         aliases:
+          # Every seeded demo tenant gets a *.localhost alias so docker-internal
+          # services can reach the backend by tenant hostname and the tenant
+          # subdomain preview (http://<id>.localhost:3001) is consistent.
+          # Keep in sync with Modules/Tenancy/database/seeders/TenantsSeeder.php
+          # (ids) and the `domains` table (each tenant needs a <id>.localhost
+          # domain record for Host-header resolution).
+          - afya-clinic.localhost
           - apple.localhost
+          - aquauno.localhost
+          - global-b2b.localhost
+          - harrawefarm.localhost
+          - lanouveil.localhost
+          - lms-demo.localhost # Aster Learning Academy (LMS academy demo)
+          - nile-suites.localhost
+          - savory-lounge.localhost
+          - selam-bistro.localhost
+          - techive.localhost
           - tesla.localhost
+          # Legacy alias — no seeded tenant with id 'spacex'; kept for
+          # compatibility.
           - spacex.localhost
 
   # 8. THE WORKER (Background Jobs)
