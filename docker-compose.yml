@@ -157,6 +157,7 @@ services:
     ports:
       - "8081:8000"
     volumes:
+      - ../hive-os-backend:/var/www/html
       - hive-backend-storage:/var/www/html/storage
     environment:
       APP_NAME: "Hive ERP"
@@ -260,6 +261,7 @@ services:
     container_name: hive-queue
     restart: unless-stopped
     volumes:
+      - ../hive-os-backend:/var/www/html
       - hive-backend-storage:/var/www/html/storage
     environment:
       APP_NAME: "Hive ERP"
@@ -388,6 +390,7 @@ services:
         condition: service_completed_successfully
     command: php artisan schedule:work
     volumes:
+      - ../hive-os-backend:/var/www/html
       - hive-backend-storage:/var/www/html/storage
     networks:
       - hive-network
@@ -401,6 +404,8 @@ services:
     restart: unless-stopped
     ports:
       - "3001:3000"
+    volumes:
+      - ../hive-os-frontend:/app
     environment:
       NODE_ENV: development
       NEXT_PUBLIC_API_URL: http://localhost:8081/api/v1
@@ -444,6 +449,7 @@ services:
     ports:
       - "9095:9000" # Expose Reverb to your local browser
     volumes:
+      - ../hive-os-backend:/var/www/html
       - hive-backend-storage:/var/www/html/storage
     environment:
       APP_NAME: "Hive ERP"
