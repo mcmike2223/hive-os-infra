@@ -10,6 +10,7 @@ Endpoints:
   GET  /health      — Health check
 """
 
+import json
 import os
 import subprocess
 import tempfile
@@ -30,6 +31,8 @@ ALLOWED_VIDEO_OUT = {"mp4", "webm", "mov", "avi", "mkv", "gif", "m4v"}
 ALLOWED_AUDIO_IN  = {"mp3", "ogg", "wav", "flac", "aac", "m4a", "opus", "wma", "mp4", "mov", "mkv", "avi"}
 ALLOWED_AUDIO_OUT = {"mp3", "ogg", "wav", "flac", "aac", "m4a", "opus"}
 ALLOWED_IMAGE_OUT = {"jpg", "jpeg", "png", "webp", "gif"}
+ALLOWED_SUBTITLE_IN = {"vtt", "srt", "ass", "ssa", "sub", "sbv", "ttml", "dfxp"}
+MAX_SUBTITLE_FILE_SIZE = 2 * 1024 * 1024
 
 MAX_FILE_SIZE = 1 * 1024 * 1024 * 1024  # 1 GB
 MAX_IMAGE_FILE_SIZE = 20 * 1024 * 1024
@@ -70,6 +73,24 @@ def run_ffmpeg(args: list[str], timeout: int = 300) -> tuple[bool, str]:
         return False, "FFmpeg conversion timed out"
     except Exception as e:
         return False, str(e)
+
+
+def probe_media_duration(path: str) -> float | None:
+    """Return the source duration so packaged subtitle cues cannot extend the MP4."""
+    try:
+        result = subprocess.run(
+            [
+                "ffprobe", "-v", "error", "-show_entries", "format=duration",
+                "-of", "default=noprint_wrappers=1:nokey=1", path,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        duration = float(result.stdout.strip()) if result.returncode == 0 else 0.0
+        return duration if duration > 0 else None
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        return None
 
 
 def error(message: str, status: int = 400):
@@ -327,45 +348,71 @@ def opencv_process():
 
 @app.post("/video/watermark")
 def video_watermark():
-    """Burn an uploaded transparent PNG overlay into every video frame."""
+    """Package a video with an optional watermark and optional WebVTT subtitle tracks."""
     if "file" not in request.files:
         return error("No video file provided")
-    if "overlay" not in request.files:
-        return error("No watermark overlay provided")
 
     video = request.files["file"]
-    overlay = request.files["overlay"]
+    overlay = request.files.get("overlay")
+    subtitle_uploads = request.files.getlist("subtitles")[:16]
     input_ext = (video.filename or "video.mp4").rsplit(".", 1)[-1].lower()
 
     if input_ext not in ALLOWED_VIDEO_IN:
         return error(f"Unsupported video input format: {input_ext}")
+    if overlay is None and not subtitle_uploads:
+        return error("No watermark or subtitle tracks were provided", 422)
+
+    try:
+        subtitle_metadata = json.loads(request.form.get("subtitle_metadata") or "[]")
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return error("Subtitle metadata is invalid", 422)
+    if not isinstance(subtitle_metadata, list):
+        return error("Subtitle metadata must be a list", 422)
 
     with tempfile.TemporaryDirectory() as tmpdir:
         input_path = os.path.join(tmpdir, f"input.{input_ext}")
-        overlay_path = os.path.join(tmpdir, "watermark.png")
-        output_path = os.path.join(tmpdir, "watermarked.mp4")
+        output_path = os.path.join(tmpdir, "packaged.mp4")
         video.save(input_path)
-        overlay.save(overlay_path)
+        source_duration = probe_media_duration(input_path)
 
-        try:
-            overlay_image = cv2.imread(overlay_path, cv2.IMREAD_UNCHANGED)
-            if overlay_image is None or overlay_image.ndim != 3 or overlay_image.shape[2] != 4:
-                return error("The watermark overlay must be a transparent PNG", 422)
-        except cv2.error:
-            return error("The watermark overlay could not be decoded", 422)
+        args = ["-i", input_path]
+        overlay_index = None
+        if overlay is not None:
+            overlay_path = os.path.join(tmpdir, "watermark.png")
+            overlay.save(overlay_path)
+            try:
+                overlay_image = cv2.imread(overlay_path, cv2.IMREAD_UNCHANGED)
+                if overlay_image is None or overlay_image.ndim != 3 or overlay_image.shape[2] != 4:
+                    return error("The watermark overlay must be a transparent PNG", 422)
+            except cv2.error:
+                return error("The watermark overlay could not be decoded", 422)
+            overlay_index = 1
+            args += ["-i", overlay_path]
 
-        filter_graph = (
-            "[1:v:0][0:v:0]scale2ref=w=main_w:h=main_h[watermark][base];"
-            "[base][watermark]overlay=0:0:format=auto:eof_action=repeat[branded]"
-        )
-        args = [
-            "-i", input_path,
-            "-loop", "1", "-i", overlay_path,
-            "-filter_complex", filter_graph,
-            "-shortest",
-            "-map", "[branded]",
-            "-map", "0:a?",
-            "-sn", "-dn",
+        subtitle_input_indexes = []
+        for subtitle_number, subtitle in enumerate(subtitle_uploads):
+            subtitle_path = os.path.join(tmpdir, f"subtitle-{subtitle_number}.vtt")
+            subtitle.save(subtitle_path)
+            contents = Path(subtitle_path).read_text(encoding="utf-8", errors="replace")
+            if not contents.lstrip().startswith("WEBVTT") or "-->" not in contents:
+                return error(f"Subtitle track {subtitle_number + 1} is not valid WebVTT", 422)
+            subtitle_input_indexes.append(1 + (1 if overlay_index is not None else 0) + subtitle_number)
+            args += ["-i", subtitle_path]
+
+        if overlay_index is not None:
+            filter_graph = (
+                f"[{overlay_index}:v:0][0:v:0]scale2ref=w=main_w:h=main_h[watermark][base];"
+                "[base][watermark]overlay=0:0:format=auto:eof_action=repeat[branded]"
+            )
+            args += ["-filter_complex", filter_graph, "-map", "[branded]"]
+        else:
+            args += ["-map", "0:v:0"]
+
+        args += ["-map", "0:a?"]
+        for subtitle_index in subtitle_input_indexes:
+            args += ["-map", f"{subtitle_index}:0"]
+
+        args += [
             "-map_metadata", "-1",
             "-movflags", "+faststart",
             "-max_muxing_queue_size", "1024",
@@ -375,17 +422,38 @@ def video_watermark():
             "-profile:v", "main",
             "-level", "4.1",
             "-crf", "23",
-            "-c:a", "copy",
-            "-f", "mp4",
-            output_path,
+            "-c:a", "aac",
+            "-b:a", "160k",
         ]
+
+        if source_duration is not None:
+            args += ["-t", f"{source_duration:.6f}"]
+
+        if subtitle_input_indexes:
+            args += ["-c:s", "mov_text"]
+            default_assigned = False
+            for index in range(len(subtitle_input_indexes)):
+                metadata = subtitle_metadata[index] if index < len(subtitle_metadata) and isinstance(subtitle_metadata[index], dict) else {}
+                language = str(metadata.get("language") or "und")[:12]
+                label = str(metadata.get("label") or f"Subtitle {index + 1}")[:80]
+                is_default = bool(metadata.get("default")) and not default_assigned
+                default_assigned = default_assigned or is_default
+                args += [
+                    f"-metadata:s:s:{index}", f"language={language}",
+                    f"-metadata:s:s:{index}", f"title={label}",
+                    f"-disposition:s:{index}", "default" if is_default else "0",
+                ]
+            if not default_assigned:
+                args += ["-disposition:s:0", "default"]
+
+        args += ["-f", "mp4", output_path]
         ok, stderr = run_ffmpeg(args, timeout=1800)
 
         if not ok:
-            app.logger.error("Video watermark failed: %s", stderr)
-            return error("The video watermark could not be generated", 500)
+            app.logger.error("Video packaging failed: %s", stderr)
+            return error("The video and subtitle tracks could not be packaged", 500)
         if not os.path.isfile(output_path) or os.path.getsize(output_path) < 1024:
-            return error("The generated video watermark output is incomplete", 500)
+            return error("The generated video output is incomplete", 500)
 
         stem = Path(video.filename or "video").stem
         response = send_file(
@@ -395,7 +463,47 @@ def video_watermark():
             download_name=f"{stem}.mp4",
         )
         response.headers["Cache-Control"] = "no-store"
-        response.headers["X-Hive-Video-Watermark"] = "bottom-right-app-name"
+        response.headers["X-Hive-Video-Watermark"] = "bottom-right-app-name" if overlay is not None else "none"
+        response.headers["X-Hive-Subtitle-Tracks"] = str(len(subtitle_input_indexes))
+        return response
+
+
+@app.post("/subtitle/convert")
+def convert_subtitle():
+    """Convert a supported timed-caption file into browser-native WebVTT."""
+    if "file" not in request.files:
+        return error("No subtitle file provided")
+
+    upload = request.files["file"]
+    extension = Path(upload.filename or "").suffix.lower().lstrip(".")
+    if extension not in ALLOWED_SUBTITLE_IN:
+        return error("Unsupported subtitle format. Use VTT, SRT, ASS, SSA, SUB, SBV, TTML, or DFXP.", 422)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        input_path = os.path.join(tmpdir, f"input.{extension}")
+        output_path = os.path.join(tmpdir, "subtitle.vtt")
+        upload.save(input_path)
+
+        if os.path.getsize(input_path) > MAX_SUBTITLE_FILE_SIZE:
+            return error("Subtitle files must not exceed 2 MB.", 413)
+
+        ok, stderr = run_ffmpeg([
+            "-nostdin", "-hide_banner", "-loglevel", "error",
+            "-i", input_path,
+            "-map", "0:s:0?",
+            "-f", "webvtt",
+            output_path,
+        ], timeout=30)
+        if not ok or not os.path.isfile(output_path):
+            app.logger.info("Subtitle conversion rejected: %s", stderr[-500:])
+            return error("This subtitle could not be converted. Check that it contains valid timed captions.", 422)
+
+        contents = Path(output_path).read_text(encoding="utf-8", errors="replace")
+        if not contents.lstrip().startswith("WEBVTT") or "-->" not in contents:
+            return error("The converted subtitle does not contain valid WebVTT cues.", 422)
+
+        response = send_file(output_path, mimetype="text/vtt; charset=utf-8", as_attachment=True, download_name="subtitle.vtt")
+        response.headers["Cache-Control"] = "no-store"
         return response
 
 

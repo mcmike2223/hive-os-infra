@@ -72,7 +72,7 @@ services:
       - ai
     restart: unless-stopped
     # Add the host and port flags to force it to listen externally
-    command: s --host 0.0.0.0 --port 5000 
+    command: s --host 0.0.0.0 --port 5000
     ports:
       - "${REMBG_HOST_PORT:-15001}:5000"
     networks:
@@ -157,7 +157,6 @@ services:
     ports:
       - "8081:8000"
     volumes:
-      - ../hive-os-backend:/var/www/html
       - hive-backend-storage:/var/www/html/storage
     environment:
       APP_NAME: "Hive ERP"
@@ -198,11 +197,11 @@ services:
       FFMPEG_URL: http://ffmpeg:9090
       # 📡 REAL-TIME BROADCASTING
       REVERB_APP_ID: "326162"
-      REVERB_APP_KEY: "uq8zbsjhgcajsmdiwhc8"
-      REVERB_APP_SECRET: "u0shs2anhgao3uikmlbq"
+      REVERB_APP_KEY: "${REVERB_APP_KEY:-${REVERB_APP_KEY:-uq8zbsjhgcajsmdiwhc8}}"
+      REVERB_APP_SECRET: "${REVERB_APP_SECRET:-${REVERB_APP_SECRET:-u0shs2anhgao3uikmlbq}}"
       REVERB_PORT: "9000"
       REVERB_SCHEME: "http"
-      NEXT_PUBLIC_REVERB_APP_KEY: "uq8zbsjhgcajsmdiwhc8"
+      NEXT_PUBLIC_REVERB_APP_KEY: "${REVERB_APP_KEY:-${REVERB_APP_KEY:-uq8zbsjhgcajsmdiwhc8}}"
       NEXT_PUBLIC_REVERB_HOST: "localhost"
       NEXT_PUBLIC_REVERB_PORT: "9095"
       NEXT_PUBLIC_REVERB_SCHEME: "http"
@@ -210,8 +209,8 @@ services:
       REVERB_HOST: reverb
       PUSHER_HOST: reverb
       PUSHER_APP_ID: "326162"
-      PUSHER_APP_KEY: "uq8zbsjhgcajsmdiwhc8"
-      PUSHER_APP_SECRET: "u0shs2anhgao3uikmlbq"
+      PUSHER_APP_KEY: "${REVERB_APP_KEY:-${REVERB_APP_KEY:-uq8zbsjhgcajsmdiwhc8}}"
+      PUSHER_APP_SECRET: "${REVERB_APP_SECRET:-${REVERB_APP_SECRET:-u0shs2anhgao3uikmlbq}}"
       PUSHER_PORT: "9000"
       PUSHER_SCHEME: "http"
     depends_on:
@@ -261,7 +260,6 @@ services:
     container_name: hive-queue
     restart: unless-stopped
     volumes:
-      - ../hive-os-backend:/var/www/html
       - hive-backend-storage:/var/www/html/storage
     environment:
       APP_NAME: "Hive ERP"
@@ -272,11 +270,15 @@ services:
       DB_DATABASE: hive
       DB_USERNAME: hive
       DB_PASSWORD: password
+      SCOUT_DRIVER: meilisearch
+      MEILISEARCH_HOST: http://meilisearch:7700
+      MEILISEARCH_KEY: masterKey
       REDIS_HOST: redis
+      CACHE_STORE: redis
       QUEUE_CONNECTION: redis
       REVERB_APP_ID: "326162"
-      REVERB_APP_KEY: "uq8zbsjhgcajsmdiwhc8"
-      REVERB_APP_SECRET: "u0shs2anhgao3uikmlbq"
+      REVERB_APP_KEY: "${REVERB_APP_KEY:-${REVERB_APP_KEY:-uq8zbsjhgcajsmdiwhc8}}"
+      REVERB_APP_SECRET: "${REVERB_APP_SECRET:-${REVERB_APP_SECRET:-u0shs2anhgao3uikmlbq}}"
       REVERB_PORT: "9000"
       REVERB_SCHEME: "http"
       FILESYSTEM_DISK: s3
@@ -297,8 +299,8 @@ services:
       REVERB_HOST: reverb
       PUSHER_HOST: reverb
       PUSHER_APP_ID: "326162"
-      PUSHER_APP_KEY: "uq8zbsjhgcajsmdiwhc8"
-      PUSHER_APP_SECRET: "u0shs2anhgao3uikmlbq"
+      PUSHER_APP_KEY: "${REVERB_APP_KEY:-${REVERB_APP_KEY:-uq8zbsjhgcajsmdiwhc8}}"
+      PUSHER_APP_SECRET: "${REVERB_APP_SECRET:-${REVERB_APP_SECRET:-u0shs2anhgao3uikmlbq}}"
       PUSHER_PORT: "9000"
       PUSHER_SCHEME: "http"
       FRONTEND_URL: http://localhost:3001
@@ -307,6 +309,8 @@ services:
       redis:
         condition: service_healthy
       db:
+        condition: service_healthy
+      meilisearch:
         condition: service_healthy
       seaweedfs:
         condition: service_started
@@ -360,15 +364,15 @@ services:
       GOTENBERG_URL: http://gotenberg:3000
       FFMPEG_URL: http://ffmpeg:9090
       REVERB_APP_ID: "326162"
-      REVERB_APP_KEY: "uq8zbsjhgcajsmdiwhc8"
-      REVERB_APP_SECRET: "u0shs2anhgao3uikmlbq"
+      REVERB_APP_KEY: "${REVERB_APP_KEY:-${REVERB_APP_KEY:-uq8zbsjhgcajsmdiwhc8}}"
+      REVERB_APP_SECRET: "${REVERB_APP_SECRET:-${REVERB_APP_SECRET:-u0shs2anhgao3uikmlbq}}"
       REVERB_PORT: "9000"
       REVERB_SCHEME: "http"
       REVERB_HOST: reverb
       PUSHER_HOST: reverb
       PUSHER_APP_ID: "326162"
-      PUSHER_APP_KEY: "uq8zbsjhgcajsmdiwhc8"
-      PUSHER_APP_SECRET: "u0shs2anhgao3uikmlbq"
+      PUSHER_APP_KEY: "${REVERB_APP_KEY:-${REVERB_APP_KEY:-uq8zbsjhgcajsmdiwhc8}}"
+      PUSHER_APP_SECRET: "${REVERB_APP_SECRET:-${REVERB_APP_SECRET:-u0shs2anhgao3uikmlbq}}"
       PUSHER_PORT: "9000"
       PUSHER_SCHEME: "http"
       FRONTEND_URL: http://localhost:3001
@@ -397,17 +401,13 @@ services:
     restart: unless-stopped
     ports:
       - "3001:3000"
-    volumes:
-      - ../hive-os-frontend:/app
-      - /app/node_modules
-      - /app/.next
     environment:
       NODE_ENV: development
       NEXT_PUBLIC_API_URL: http://localhost:8081/api/v1
       INTERNAL_API_URL: http://backend:8000/api/v1
       WATCHPACK_POLLING: "true"
       # 📡 REAL-TIME BROADCASTING
-      NEXT_PUBLIC_REVERB_APP_KEY: "uq8zbsjhgcajsmdiwhc8"
+      NEXT_PUBLIC_REVERB_APP_KEY: "${REVERB_APP_KEY:-${REVERB_APP_KEY:-uq8zbsjhgcajsmdiwhc8}}"
       NEXT_PUBLIC_REVERB_HOST: "localhost"
       NEXT_PUBLIC_REVERB_PORT: "9095"
       NEXT_PUBLIC_REVERB_SCHEME: "http"
@@ -416,7 +416,6 @@ services:
       PORT: 3000
     depends_on:
       - backend
-    command: sh /app/docker-entrypoint.sh
     networks:
       - hive-network
 
@@ -458,8 +457,8 @@ services:
       REDIS_HOST: redis
       BROADCAST_CONNECTION: reverb
       REVERB_APP_ID: "326162"
-      REVERB_APP_KEY: "uq8zbsjhgcajsmdiwhc8"
-      REVERB_APP_SECRET: "u0shs2anhgao3uikmlbq"
+      REVERB_APP_KEY: "${REVERB_APP_KEY:-${REVERB_APP_KEY:-uq8zbsjhgcajsmdiwhc8}}"
+      REVERB_APP_SECRET: "${REVERB_APP_SECRET:-${REVERB_APP_SECRET:-u0shs2anhgao3uikmlbq}}"
       REVERB_HOST: localhost
       REVERB_PORT: "9000"
       REVERB_SCHEME: "http"
@@ -494,7 +493,7 @@ services:
     container_name: hive-ffmpeg
     restart: unless-stopped
     ports:
-      - "9090:9090"
+      - "9098:9090"
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:9090/health || exit 1"]
       interval: 10s
@@ -515,12 +514,171 @@ services:
     networks:
       - hive-network
 
+  # 🧠 14. LOCAL LANGUAGE MODEL (Ollama)
+  #
+  # The assistant's phrasing layer, self-hosted. Nothing here is metered and no
+  # request leaves the machine — which is the whole reason it exists: every
+  # hosted free tier has a quota, and this one does not.
+  #
+  # It is only ever asked to word an answer Hive has already established and
+  # verified, so a small model is sufficient; it does not need to know anything.
+  ollama:
+    image: ollama/ollama:latest
+    container_name: hive-ollama
+    restart: unless-stopped
+    ports:
+      # Exposed for `ollama pull` from the host. The backend reaches it over the
+      # compose network at http://ollama:11434 instead.
+      - "11434:11434"
+    volumes:
+      - hive-ollama-models:/root/.ollama
+    environment:
+      # Keep the model resident so the first message after an idle spell is not
+      # noticeably slower than the rest.
+      OLLAMA_KEEP_ALIVE: "24h"
+      # One at a time: this GPU is shared with everything else on the machine.
+      OLLAMA_NUM_PARALLEL: "1"
+      OLLAMA_MAX_LOADED_MODELS: "1"
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    # GPU passthrough is optional. Ollama automatically uses CPU if GPU is not available.
+    networks:
+      - hive-network
+
+  # ==========================================
+  # Monitoring Stack (Profile: monitoring)
+  # ==========================================
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: hive-prometheus
+    restart: unless-stopped
+    profiles:
+      - monitoring
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+      - hive-prometheus-data:/prometheus
+    ports:
+      - "9080:9090"
+    networks:
+      - hive-network
+
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: hive-alertmanager
+    restart: unless-stopped
+    profiles:
+      - monitoring
+    volumes:
+      - ./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    ports:
+      - "9093:9093"
+    networks:
+      - hive-network
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: hive-grafana
+    restart: unless-stopped
+    profiles:
+      - monitoring
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GF_SECURITY_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/etc/grafana/dashboards:ro
+      - hive-grafana-data:/var/lib/grafana
+    ports:
+      - "3002:3000"
+    networks:
+      - hive-network
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: hive-node-exporter
+    restart: unless-stopped
+    profiles:
+      - monitoring
+    ports:
+      - "9100:9100"
+    networks:
+      - hive-network
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: hive-cadvisor
+    restart: unless-stopped
+    privileged: true
+    profiles:
+      - monitoring
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    devices:
+      - /dev/kmsg
+    ports:
+      - "8089:8080"
+    networks:
+      - hive-network
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+    container_name: hive-postgres-exporter
+    restart: unless-stopped
+    profiles:
+      - monitoring
+    environment:
+      - DATA_SOURCE_NAME=postgresql://hive:password@db:5432/hive?sslmode=disable
+    ports:
+      - "9187:9187"
+    networks:
+      - hive-network
+
+  redis-exporter:
+    image: oliver006/redis_exporter:latest
+    container_name: hive-redis-exporter
+    restart: unless-stopped
+    profiles:
+      - monitoring
+    environment:
+      - REDIS_ADDR=redis:6379
+    ports:
+      - "9121:9121"
+    networks:
+      - hive-network
+
+  blackbox-exporter:
+    image: prom/blackbox-exporter:latest
+    container_name: hive-blackbox-exporter
+    restart: unless-stopped
+    profiles:
+      - monitoring
+    volumes:
+      - ./monitoring/blackbox.yml:/config/blackbox.yml:ro
+    ports:
+      - "9115:9115"
+    networks:
+      - hive-network
+
 networks:
   hive-network:
     driver: bridge
 
 volumes:
+  hive-prometheus-data:
+  hive-grafana-data:
   hive-db-data:
   hive-search-data:
   hive-seaweedfs-data:
   hive-backend-storage:
+  hive-ollama-models:
