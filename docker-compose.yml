@@ -161,6 +161,9 @@ services:
       APP_NAME: "Hive ERP"
       APP_ENV: local
       APP_DEBUG: "${APP_DEBUG:-false}"
+      # Laraowl is optional. Do not emit failing telemetry unless a reachable
+      # monitoring server has been deliberately configured for this stack.
+      LARAOWL_ENABLED: "${LARAOWL_ENABLED:-false}"
       APP_KEY: base64:c29tZXJhbmRvbXN0cmluZ2ZvcmRldmVsb3BtZW50MjE=
       APP_URL: http://localhost:8081
       FRONTEND_URL: http://localhost:3001
@@ -264,6 +267,7 @@ services:
     environment:
       APP_NAME: "Hive ERP"
       APP_ENV: local
+      LARAOWL_ENABLED: "${LARAOWL_ENABLED:-false}"
       APP_KEY: base64:c29tZXJhbmRvbXN0cmluZ2ZvcmRldmVsb3BtZW50MjE=
       DB_CONNECTION: pgsql
       DB_HOST: db
@@ -332,6 +336,7 @@ services:
     environment:
       APP_NAME: "Hive ERP"
       APP_ENV: local
+      LARAOWL_ENABLED: "${LARAOWL_ENABLED:-false}"
       APP_KEY: base64:c29tZXJhbmRvbXN0cmluZ2ZvcmRldmVsb3BtZW50MjE=
       DB_CONNECTION: pgsql
       DB_HOST: db
@@ -452,6 +457,7 @@ services:
     environment:
       APP_NAME: "Hive ERP"
       APP_ENV: local
+      LARAOWL_ENABLED: "${LARAOWL_ENABLED:-false}"
       APP_KEY: base64:c29tZXJhbmRvbXN0cmluZ2ZvcmRldmVsb3BtZW50MjE=
       DB_CONNECTION: pgsql
       DB_HOST: db
