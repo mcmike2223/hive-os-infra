@@ -37,6 +37,7 @@ MAX_SUBTITLE_FILE_SIZE = 2 * 1024 * 1024
 MAX_FILE_SIZE = 1 * 1024 * 1024 * 1024  # 1 GB
 MAX_IMAGE_FILE_SIZE = 20 * 1024 * 1024
 MAX_IMAGE_PIXELS = 24_000_000
+app.config["MAX_CONTENT_LENGTH"] = MAX_FILE_SIZE
 OPENCV_OPERATIONS = {
     "smart_cutout",
     "logo_cutout",
@@ -95,6 +96,11 @@ def probe_media_duration(path: str) -> float | None:
 
 def error(message: str, status: int = 400):
     return jsonify({"error": message}), status
+
+
+@app.errorhandler(413)
+def request_too_large(_error):
+    return error("The uploaded request exceeds the 1 GB limit.", 413)
 
 
 def bounded_int(value, default: int, minimum: int, maximum: int) -> int:

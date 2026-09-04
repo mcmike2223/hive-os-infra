@@ -18,7 +18,7 @@ services:
     container_name: hive-db
     restart: unless-stopped
     ports:
-      - "5439:5432"
+      - "127.0.0.1:5439:5432"
     environment:
       POSTGRES_DB: hive
       POSTGRES_USER: hive
@@ -38,10 +38,8 @@ services:
     image: getmeili/meilisearch:v1.10
     container_name: hive-search
     restart: unless-stopped
-    ports:
-      - "7200:7700"
     environment:
-      - MEILI_MASTER_KEY=masterKey
+      - MEILI_MASTER_KEY=${MEILISEARCH_KEY:?MEILISEARCH_KEY must be set in .env}
       - MEILI_NO_ANALYTICS=true
     volumes:
       - hive-search-data:/meili_data
@@ -59,8 +57,8 @@ services:
     container_name: hive-mailpit
     restart: unless-stopped
     ports:
-      - "11025:1025" # SMTP Port
-      - "8085:8025" # Web Dashboard Port
+      - "127.0.0.1:11025:1025" # SMTP Port
+      - "127.0.0.1:8085:8025" # Web Dashboard Port
     networks:
       - hive-network
 
@@ -74,7 +72,7 @@ services:
     # Add the host and port flags to force it to listen externally
     command: s --host 0.0.0.0 --port 5000
     ports:
-      - "${REMBG_HOST_PORT:-15001}:5000"
+      - "127.0.0.1:${REMBG_HOST_PORT:-15001}:5000"
     networks:
       - hive-network
 
@@ -85,9 +83,9 @@ services:
     restart: unless-stopped
     command: server -dir=/data -s3
     ports:
-      - "${SEAWEEDFS_S3_HOST_PORT:-8333}:8333"
-      - "${SEAWEEDFS_FILER_HOST_PORT:-8888}:8888"
-      - "${SEAWEEDFS_MASTER_HOST_PORT:-9333}:9333"
+      - "127.0.0.1:${SEAWEEDFS_S3_HOST_PORT:-8333}:8333"
+      - "127.0.0.1:${SEAWEEDFS_FILER_HOST_PORT:-8888}:8888"
+      - "127.0.0.1:${SEAWEEDFS_MASTER_HOST_PORT:-9333}:9333"
     environment:
       AWS_ACCESS_KEY_ID: ${SEAWEEDFS_ACCESS_KEY:-seaweedfs}
       AWS_SECRET_ACCESS_KEY: ${SEAWEEDFS_SECRET_KEY:-change-this-seaweedfs-secret}
@@ -123,7 +121,7 @@ services:
       - storage-ui
     restart: unless-stopped
     ports:
-      - "${SEAWEEDFS_BROWSER_HOST_PORT:-9091}:8080"
+      - "127.0.0.1:${SEAWEEDFS_BROWSER_HOST_PORT:-9091}:8080"
     environment:
       ENDPOINT: seaweedfs:8333
       REGION: us-east-1
@@ -155,14 +153,14 @@ services:
     # WSL bind mounts don't honor the exec bit, so run the script via sh.
     entrypoint: ["sh", "/var/www/html/docker/entrypoint.sh"]
     ports:
-      - "8081:8000"
+      - "127.0.0.1:8081:8000"
     volumes:
       - ../hive-os-backend:/var/www/html
       - hive-backend-storage:/var/www/html/storage
     environment:
       APP_NAME: "Hive ERP"
       APP_ENV: local
-      APP_DEBUG: "true"
+      APP_DEBUG: "${APP_DEBUG:-false}"
       APP_KEY: base64:c29tZXJhbmRvbXN0cmluZ2ZvcmRldmVsb3BtZW50MjE=
       APP_URL: http://localhost:8081
       FRONTEND_URL: http://localhost:3001
@@ -175,7 +173,7 @@ services:
       OCTANE_SERVER: roadrunner
       SCOUT_DRIVER: meilisearch
       MEILISEARCH_HOST: http://meilisearch:7700
-      MEILISEARCH_KEY: masterKey
+      MEILISEARCH_KEY: ${MEILISEARCH_KEY:?MEILISEARCH_KEY must be set in .env}
       REDIS_HOST: redis
       CACHE_STORE: redis
       QUEUE_CONNECTION: redis
@@ -274,7 +272,7 @@ services:
       DB_PASSWORD: password
       SCOUT_DRIVER: meilisearch
       MEILISEARCH_HOST: http://meilisearch:7700
-      MEILISEARCH_KEY: masterKey
+      MEILISEARCH_KEY: ${MEILISEARCH_KEY:?MEILISEARCH_KEY must be set in .env}
       REDIS_HOST: redis
       CACHE_STORE: redis
       QUEUE_CONNECTION: redis
@@ -344,7 +342,7 @@ services:
       OCTANE_SERVER: roadrunner
       SCOUT_DRIVER: meilisearch
       MEILISEARCH_HOST: http://meilisearch:7700
-      MEILISEARCH_KEY: masterKey
+      MEILISEARCH_KEY: ${MEILISEARCH_KEY:?MEILISEARCH_KEY must be set in .env}
       REDIS_HOST: redis
       CACHE_STORE: redis
       QUEUE_CONNECTION: redis
@@ -403,7 +401,7 @@ services:
     container_name: hive-frontend
     restart: unless-stopped
     ports:
-      - "3001:3000"
+      - "127.0.0.1:3001:3000"
     volumes:
       - ../hive-os-frontend:/app
     environment:
@@ -430,7 +428,7 @@ services:
     container_name: hive-adminer
     restart: unless-stopped
     ports:
-      - "8083:8080"
+      - "127.0.0.1:8083:8080"
     environment:
       ADMINER_DEFAULT_SERVER: db
     depends_on:
@@ -447,7 +445,7 @@ services:
     container_name: hive-reverb
     restart: unless-stopped
     ports:
-      - "9095:9000" # Expose Reverb to your local browser
+      - "127.0.0.1:9095:9000" # Expose Reverb to your local browser
     volumes:
       - ../hive-os-backend:/var/www/html
       - hive-backend-storage:/var/www/html/storage
@@ -487,7 +485,7 @@ services:
         condition: service_started
       seaweedfs-bootstrap:
         condition: service_completed_successfully
-    command: php artisan reverb:start --host=0.0.0.0 --port=9000 --debug
+    command: php artisan reverb:start --host=0.0.0.0 --port=9000
     networks:
       - hive-network
 
@@ -498,8 +496,16 @@ services:
       dockerfile: Dockerfile
     container_name: hive-ffmpeg
     restart: unless-stopped
-    ports:
-      - "9098:9090"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=3g
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 256
+    mem_limit: 3g
+    cpus: 2.0
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:9090/health || exit 1"]
       interval: 10s
@@ -515,8 +521,6 @@ services:
     profiles:
       - docs
     restart: unless-stopped
-    ports:
-      - "3030:3000" # Mapped to 3030 on the host machine to prevent port collision with Next.js
     networks:
       - hive-network
 
@@ -535,7 +539,7 @@ services:
     ports:
       # Exposed for `ollama pull` from the host. The backend reaches it over the
       # compose network at http://ollama:11434 instead.
-      - "11434:11434"
+      - "127.0.0.1:11434:11434"
     volumes:
       - hive-ollama-models:/root/.ollama
     environment:
@@ -569,7 +573,7 @@ services:
       - ./monitoring/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
       - hive-prometheus-data:/prometheus
     ports:
-      - "9080:9090"
+      - "127.0.0.1:9080:9090"
     networks:
       - hive-network
 
@@ -582,7 +586,7 @@ services:
     volumes:
       - ./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
     ports:
-      - "9093:9093"
+      - "127.0.0.1:9093:9093"
     networks:
       - hive-network
 
@@ -594,14 +598,14 @@ services:
       - monitoring
     environment:
       - GF_SECURITY_ADMIN_USER=${GF_SECURITY_ADMIN_USER:-admin}
-      - GF_SECURITY_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD:?GF_SECURITY_ADMIN_PASSWORD must be set in .env}
       - GF_USERS_ALLOW_SIGN_UP=false
     volumes:
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./monitoring/grafana/dashboards:/etc/grafana/dashboards:ro
       - hive-grafana-data:/var/lib/grafana
     ports:
-      - "3002:3000"
+      - "127.0.0.1:3002:3000"
     networks:
       - hive-network
 
@@ -612,7 +616,7 @@ services:
     profiles:
       - monitoring
     ports:
-      - "9100:9100"
+      - "127.0.0.1:9100:9100"
     networks:
       - hive-network
 
@@ -620,7 +624,6 @@ services:
     image: gcr.io/cadvisor/cadvisor:v0.49.1
     container_name: hive-cadvisor
     restart: unless-stopped
-    privileged: true
     profiles:
       - monitoring
     volumes:
@@ -632,8 +635,10 @@ services:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
     devices:
       - /dev/kmsg
+    security_opt:
+      - no-new-privileges:true
     ports:
-      - "8089:8080"
+      - "127.0.0.1:8089:8080"
     networks:
       - hive-network
 
@@ -646,7 +651,7 @@ services:
     environment:
       - DATA_SOURCE_NAME=postgresql://hive:password@db:5432/hive?sslmode=disable
     ports:
-      - "9187:9187"
+      - "127.0.0.1:9187:9187"
     networks:
       - hive-network
 
@@ -659,7 +664,7 @@ services:
     environment:
       - REDIS_ADDR=redis:6379
     ports:
-      - "9121:9121"
+      - "127.0.0.1:9121:9121"
     networks:
       - hive-network
 
@@ -672,7 +677,7 @@ services:
     volumes:
       - ./monitoring/blackbox.yml:/config/blackbox.yml:ro
     ports:
-      - "9115:9115"
+      - "127.0.0.1:9115:9115"
     networks:
       - hive-network
 
