@@ -706,13 +706,15 @@ services:
       start_period: 20s
 
   video-media:
-    image: livekit/livekit-server:v1.9.0
+    image: livekit/livekit-server:v1.13.6
     container_name: hive-video-media
     restart: unless-stopped
     command: --config /etc/livekit.yaml
     ports:
       - "127.0.0.1:17880:7880"
       - "${HIVE_VIDEO_MEDIA_IP:-127.0.0.1}:17881:17881"
+      - "${HIVE_VIDEO_MEDIA_IP:-127.0.0.1}:17882:17882/udp"
+      - "${HIVE_VIDEO_MEDIA_IP:-127.0.0.1}:50200-50240:50200-50240/udp"
       - "${HIVE_VIDEO_MEDIA_IP:-127.0.0.1}:50100-50120:50100-50120/udp"
     volumes:
       - ./.video/livekit.yaml:/etc/livekit.yaml:ro

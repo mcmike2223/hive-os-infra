@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Configure loopback-only Hive video without replacing existing credentials."""
+"""Configure local Hive video without replacing existing credentials."""
 import os
+import json
 import argparse
 import ipaddress
 import re
@@ -10,12 +11,23 @@ import subprocess
 
 infra = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument("--media-ip", help="Private IPv4 address assigned to this host; use the Windows WSL adapter for local Firefox")
+parser.add_argument("--media-ip", help="Private IPv4 address assigned to this host; use a non-overlapping private Windows host adapter for local Firefox")
 args = parser.parse_args()
 if args.media_ip:
     ip = ipaddress.ip_address(args.media_ip)
     if ip.version != 4 or ip.is_unspecified or ip.is_multicast or not ip.is_private:
         raise SystemExit("Use a private IPv4 address assigned to this computer.")
+    # Docker routes overlapping host addresses into its own bridge, breaking TURN.
+    network_ids = subprocess.run(["docker", "network", "ls", "-q"], check=True,
+                                 capture_output=True, text=True).stdout.split()
+    if network_ids:
+        networks = json.loads(subprocess.run(["docker", "network", "inspect", *network_ids],
+                                             check=True, capture_output=True, text=True).stdout)
+        for network in networks:
+            for entry in network.get("IPAM", {}).get("Config") or []:
+                subnet = entry.get("Subnet")
+                if subnet and ip in ipaddress.ip_network(subnet):
+                    raise SystemExit(f"Media address overlaps Docker network {network['Name']} ({subnet}); choose another private host adapter.")
 private = infra / ".video"
 hive_env = infra.parent / "hive-os-backend" / ".env"
 if not hive_env.is_file():
@@ -64,6 +76,22 @@ if args.media_ip:
     entries = [line for line in entries if not line.startswith("HIVE_VIDEO_MEDIA_IP=")]
     entries.append("HIVE_VIDEO_MEDIA_IP=" + args.media_ip)
     compose_env.write_text("\n".join(entries) + "\n")
+# Embedded TURN uses per-participant credentials issued by LiveKit. Limit relay
+# access to the configured media address, including on private Docker networks.
+media_config = media.read_text()
+media_ip_match = re.search(r"(?m)^  node_ip:\s*(\S+)\s*$", media_config)
+if not media_ip_match:
+    raise SystemExit("Missing rtc.node_ip; configure a media address before enabling TURN.")
+media_ip = str(ipaddress.ip_address(media_ip_match.group(1)))
+if "\nturn:" not in media_config:
+    media_config += ("\nturn:\n  enabled: true\n  udp_port: 17882\n  tls_port: 0\n"
+                     "  relay_range_start: 50200\n  relay_range_end: 50240\n"
+                     "  allow_restricted_peer_cidrs:\n    - " + media_ip + "/32\n")
+elif args.media_ip:
+    # Only update the single-host allow-list produced by this setup script.
+    media_config = re.sub(r"(allow_restricted_peer_cidrs:\n    - )[^\n]+/32",
+                          lambda match: match.group(1) + media_ip + "/32", media_config)
+media.write_text(media_config)
 values = dict(line.split("=", 1) for line in backend.read_text().splitlines()
               if "=" in line and not line.startswith("#"))
 shared = values.get("HIVE_VIDEO_SECRET", "")
