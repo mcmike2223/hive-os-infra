@@ -687,6 +687,37 @@ services:
     networks:
       - hive-network
 
+  video-backend:
+    image: hive-video-backend:latest
+    build:
+      context: ../../zoom-clone/backend
+    container_name: hive-video-backend
+    restart: unless-stopped
+    env_file: .video/backend.env
+    volumes:
+      - hive-video-data:/app/data
+    networks: [hive-network]
+    depends_on: [video-media]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  video-media:
+    image: livekit/livekit-server:v1.9.0
+    container_name: hive-video-media
+    restart: unless-stopped
+    command: --config /etc/livekit.yaml
+    ports:
+      - "127.0.0.1:17880:7880"
+      - "127.0.0.1:17881:17881"
+      - "127.0.0.1:50100-50120:50100-50120/udp"
+    volumes:
+      - ./.video/livekit.yaml:/etc/livekit.yaml:ro
+    networks: [hive-network]
+
 networks:
   hive-network:
     driver: bridge
@@ -699,3 +730,7 @@ volumes:
   hive-seaweedfs-data:
   hive-backend-storage:
   hive-ollama-models:
+
+  hive-video-data:
+    external: true
+    name: hive-video_video-data
