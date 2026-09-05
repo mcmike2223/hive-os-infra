@@ -1,11 +1,21 @@
 #!/usr/bin/env python3
 """Configure loopback-only Hive video without replacing existing credentials."""
 import os
+import argparse
+import ipaddress
+import re
 from pathlib import Path
 import secrets
 import subprocess
 
 infra = Path(__file__).resolve().parents[1]
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("--media-ip", help="Private IPv4 address assigned to this host; use the Windows WSL adapter for local Firefox")
+args = parser.parse_args()
+if args.media_ip:
+    ip = ipaddress.ip_address(args.media_ip)
+    if ip.version != 4 or ip.is_unspecified or ip.is_multicast or not ip.is_private:
+        raise SystemExit("Use a private IPv4 address assigned to this computer.")
 private = infra / ".video"
 hive_env = infra.parent / "hive-os-backend" / ".env"
 if not hive_env.is_file():
@@ -44,6 +54,16 @@ rtc:
   port_range_start: 50100
   port_range_end: 50120
 """)
+if args.media_ip:
+    config, count = re.subn(r"(?m)^  node_ip:.*$", "  node_ip: " + args.media_ip, media.read_text())
+    if count != 1:
+        raise SystemExit("Expected exactly one rtc.node_ip in media configuration.")
+    media.write_text(config)
+    compose_env = infra / ".env"
+    entries = compose_env.read_text().splitlines() if compose_env.exists() else []
+    entries = [line for line in entries if not line.startswith("HIVE_VIDEO_MEDIA_IP=")]
+    entries.append("HIVE_VIDEO_MEDIA_IP=" + args.media_ip)
+    compose_env.write_text("\n".join(entries) + "\n")
 values = dict(line.split("=", 1) for line in backend.read_text().splitlines()
               if "=" in line and not line.startswith("#"))
 shared = values.get("HIVE_VIDEO_SECRET", "")

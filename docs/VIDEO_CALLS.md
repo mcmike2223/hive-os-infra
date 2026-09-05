@@ -53,3 +53,27 @@ Video services are part of the main hive-os-infra project as video-backend and v
 Clone https://github.com/Techiveet/zoom_clone into the sibling `../../zoom-clone` directory (relative to hive-os-infra). Run setup from WSL with Python 3 and Docker Compose v2. Setup creates local secrets only when absent, connects the Hive backend environment, and creates the named volume if needed. It preserves existing video credentials and data. Never commit `.env`, `.video`, or database backups. After changing environment settings, clear cached Laravel configuration before reloading Octane.
 
 The optional `docker-compose.local-monitoring.yml` removes host backend/Reverb port bindings on this workstation, where other services own those ports. Use it only with an existing frontend proxy that reaches those services over the Docker network.
+
+## Firefox on Windows with Docker Desktop
+
+Firefox can reject loopback ICE candidates. Choose the private IPv4 address of
+Windows' `vEthernet (WSL)` adapter, then run:
+
+```sh
+python3 scripts/setup-video.py --media-ip <WSL-adapter-IPv4>
+docker compose up -d --no-deps video-media
+```
+
+This binds media ports only to that adapter and advertises the same address.
+Signaling remains on localhost. Re-run after the adapter address changes.
+This does not configure calls from other computers or public internet access.
+
+## September 5 follow-up verification
+
+The Admin role now includes dashboard and communications access in the central
+catalog. Its seeder adds these permissions while preserving custom grants.
+Local API checks using temporary accounts passed login, required password change,
+dashboard, two-way chat persistence/read, mail delivery/read, and call tokens for
+both participants. Temporary accounts and messages were removed afterward.
+The 22 catalog and video regression tests passed. Browser join/leave connected
+via UDP using the Windows WSL adapter; Firefox-specific retesting is pending.

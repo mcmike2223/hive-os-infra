@@ -712,8 +712,8 @@ services:
     command: --config /etc/livekit.yaml
     ports:
       - "127.0.0.1:17880:7880"
-      - "127.0.0.1:17881:17881"
-      - "127.0.0.1:50100-50120:50100-50120/udp"
+      - "${HIVE_VIDEO_MEDIA_IP:-127.0.0.1}:17881:17881"
+      - "${HIVE_VIDEO_MEDIA_IP:-127.0.0.1}:50100-50120:50100-50120/udp"
     volumes:
       - ./.video/livekit.yaml:/etc/livekit.yaml:ro
     networks: [hive-network]
